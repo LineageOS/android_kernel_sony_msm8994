@@ -34,6 +34,7 @@
 
 #include "mdss_mdp.h"
 #include "mdss_dsi.h"
+#include "mdss_livedisplay.h"
 
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 30
@@ -242,7 +243,7 @@ u32 mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	return 0;
 }
 
-static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_panel_cmds *pcmds, u32 flags)
 {
 	struct dcs_cmd_req cmdreq;
@@ -1337,6 +1338,8 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 			}
 		}
 	}
+
+	mdss_livedisplay_update(ctrl_pdata, MODE_UPDATE_ALL);
 end:
 	pinfo->blank_state = MDSS_PANEL_BLANK_UNBLANK;
 	pr_debug("%s:-\n", __func__);
@@ -3448,6 +3451,8 @@ static int mdss_panel_parse_dt(struct device_node *np,
 		rc = of_property_read_u32(np, "somc,poll-esd-reg-val", &tmp);
 		spec_pdata->polling.esd.correct_val = (!rc ? tmp : 0x9C);
 	}
+
+	mdss_livedisplay_parse_dt(np, pinfo);
 
 	return 0;
 
