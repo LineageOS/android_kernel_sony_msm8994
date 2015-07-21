@@ -171,7 +171,7 @@ DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 ##############################
 # Android Platform Definition
 ##############################
-BCM_SRC_DIR :=	bcmdhd
+BCM_SRC_DIR := ./
 
 ###########
 # Lollipop
@@ -201,7 +201,7 @@ DHDCFLAGS += -DGSCAN_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
 
 # Extra file list for Lollipop
-ANDROID_OFILES := $(BCM_SRC_DIR)/wl_cfgvendor.o
+ANDROID_OFILES := wl_cfgvendor.o
 
 
 
@@ -286,7 +286,7 @@ endif
   DHDCFLAGS += -DDISABLE_TXBFR
 ifeq ($(CONFIG_BCM4356),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
-  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
+#  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
 endif
 ifeq ($(BUS_IFACE_SDIO),y)
   DHDCFLAGS += -DCUSTOM_PSPRETEND_THR=30
@@ -347,7 +347,7 @@ endif
   DHDCFLAGS += -DSUPPORT_WL_TXPOWER
 ifeq ($(CONFIG_BCM4354),y)
   DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
-  DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
+# DHDCFLAGS += -DUSE_LATE_INITCALL_SYNC
 endif
 
 ifeq ($(BUS_IFACE_SDIO),y)
@@ -464,60 +464,59 @@ endif
 
 EXTRA_LDFLAGS += --strip-debug
 EXTRA_CFLAGS += $(DHDCFLAGS) -DDHD_DEBUG
-EXTRA_CFLAGS += -DSRCBASE=\"$(BCM_SRC_DIR)\"
-EXTRA_CFLAGS += -I$(WLAN_ROOT)/$(BCM_SRC_DIR)/include/ \
-		-I$(WLAN_ROOT)/$(BCM_SRC_DIR)/ \
-		-I$(WLAN_ROOT)/../common/
+EXTRA_CFLAGS += -DSRCBASE=\"$(src)\"
+EXTRA_CFLAGS += -I$(src)/include/ -I$(src)/
+KBUILD_CFLAGS += -I$(LINUXDIR)/include -I$(shell pwd)
 
 MODNAME := wlan
 
-DHDOFILES := $(BCM_SRC_DIR)/dhd_pno.o \
-		$(BCM_SRC_DIR)/dhd_common.o \
-		$(BCM_SRC_DIR)/dhd_ip.o \
-		$(BCM_SRC_DIR)/dhd_custom_gpio.o \
-		$(BCM_SRC_DIR)/dhd_linux.o \
-		$(BCM_SRC_DIR)/dhd_linux_sched.o \
-		$(BCM_SRC_DIR)/dhd_cfg80211.o \
-		$(BCM_SRC_DIR)/dhd_linux_wq.o \
-		$(BCM_SRC_DIR)/aiutils.o \
-		$(BCM_SRC_DIR)/bcmevent.o \
-		$(BCM_SRC_DIR)/bcmutils.o \
-		$(BCM_SRC_DIR)/bcmwifi_channels.o \
-		$(BCM_SRC_DIR)/hndpmu.o \
-		$(BCM_SRC_DIR)/linux_osl.o \
-		$(BCM_SRC_DIR)/sbutils.o \
-		$(BCM_SRC_DIR)/siutils.o \
-		$(BCM_SRC_DIR)/wl_android.o \
-		$(BCM_SRC_DIR)/wl_cfg80211.o \
-		$(BCM_SRC_DIR)/wl_cfgp2p.o \
-		$(BCM_SRC_DIR)/wl_cfg_btcoex.o \
-		$(BCM_SRC_DIR)/wldev_common.o \
-		$(BCM_SRC_DIR)/wl_linux_mon.o \
-		$(BCM_SRC_DIR)/wl_roam.o \
-		$(BCM_SRC_DIR)/dhd_linux_platdev.o \
-		$(BCM_SRC_DIR)/dhd_wlfc.o \
-		$(BCM_SRC_DIR)/hnd_pktq.o \
-		$(BCM_SRC_DIR)/hnd_pktpool.o \
-		$(BCM_SRC_DIR)/wl_cfgnan.o \
-		$(BCM_SRC_DIR)/bcmxtlv.o \
-		../common/dhd_somc_custom.o
+DHDOFILES := dhd_pno.o \
+		dhd_common.o \
+		dhd_ip.o \
+		dhd_custom_gpio.o \
+		dhd_linux.o \
+		dhd_linux_sched.o \
+		dhd_cfg80211.o \
+		dhd_linux_wq.o \
+		aiutils.o \
+		bcmevent.o \
+		bcmutils.o \
+		bcmwifi_channels.o \
+		hndpmu.o \
+		linux_osl.o \
+		sbutils.o \
+		siutils.o \
+		wl_android.o \
+		wl_cfg80211.o \
+		wl_cfgp2p.o \
+		wl_cfg_btcoex.o \
+		wldev_common.o \
+		wl_linux_mon.o \
+		wl_roam.o \
+		dhd_linux_platdev.o \
+		dhd_wlfc.o \
+		hnd_pktq.o \
+		hnd_pktpool.o \
+		wl_cfgnan.o \
+		bcmxtlv.o \
+		dhd_somc_custom.o
 
 ifeq ($(BUS_IFACE_SDIO),y)
-DHDOFILES += $(BCM_SRC_DIR)/bcmsdh.o \
-		$(BCM_SRC_DIR)/bcmsdh_linux.o \
-		$(BCM_SRC_DIR)/bcmsdh_sdmmc.o \
-		$(BCM_SRC_DIR)/bcmsdh_sdmmc_linux.o \
-		$(BCM_SRC_DIR)/dhd_cdc.o \
-		$(BCM_SRC_DIR)/dhd_sdio.o
+DHDOFILES += bcmsdh.o \
+		bcmsdh_linux.o \
+		bcmsdh_sdmmc.o \
+		bcmsdh_sdmmc_linux.o \
+		dhd_cdc.o \
+		dhd_sdio.o
 endif
 
 
 ifeq ($(BUS_IFACE_PCIE),y)
-DHDOFILES += $(BCM_SRC_DIR)/dhd_pcie.o \
-		$(BCM_SRC_DIR)/dhd_pcie_linux.o \
-		$(BCM_SRC_DIR)/pcie_core.o \
-		$(BCM_SRC_DIR)/dhd_flowring.o \
-		$(BCM_SRC_DIR)/dhd_msgbuf.o
+DHDOFILES += dhd_pcie.o \
+		dhd_pcie_linux.o \
+		pcie_core.o \
+		dhd_flowring.o \
+		dhd_msgbuf.o
 endif
 
 
@@ -526,4 +525,4 @@ DHDOFILES += $(ANDROID_OFILES)
 # Module information used by KBuild framework
 obj-$(CONFIG_BCMDHD) += $(MODNAME).o
 
-$(MODNAME)-y := $(DHDOFILES)
+$(MODNAME)-objs := $(DHDOFILES)
