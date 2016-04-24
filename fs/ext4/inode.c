@@ -770,6 +770,7 @@ has_zeroout:
 		int ret = check_block_validity(inode, map);
 		if (ret != 0)
 			return ret;
+
 		/*
 		 * Inodes with freshly allocated blocks where contents will be
 		 * visible after transaction commit must be on transaction's
