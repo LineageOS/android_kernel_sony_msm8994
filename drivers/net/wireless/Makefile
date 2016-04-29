@@ -57,6 +57,7 @@ obj-$(CONFIG_MWIFIEX)	+= mwifiex/
 
 obj-$(CONFIG_SOMC_WIFI_CONTROL)	+= somcwifictrl/
 
+obj-$(CONFIG_BCMDHD)	+= bcmdhd/
 obj-$(CONFIG_BRCMFMAC)	+= brcm80211/
 obj-$(CONFIG_BRCMSMAC)	+= brcm80211/
 
