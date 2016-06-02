@@ -689,6 +689,10 @@
  *	QoS mapping is relevant for IP packets, it is only valid during an
  *	association. This is cleared on disassociation and AP restart.
  *
+ * @NL80211_CMD_ABORT_SCAN: Stop an ongoing scan. Returns -ENOENT if a scan is
+ *	not running. The driver indicates the status of the scan through
+ *	cfg80211_scan_done().
+ *
  * @NL80211_CMD_MAX: highest used command number
  * @__NL80211_CMD_AFTER_LAST: internal use
  */
@@ -859,6 +863,8 @@ enum nl80211_commands {
 	NL80211_CMD_VENDOR,
 
 	NL80211_CMD_SET_QOS_MAP,
+
+	NL80211_CMD_ABORT_SCAN = NL80211_CMD_SET_QOS_MAP + 10,
 
 	/* add new commands above here */
 

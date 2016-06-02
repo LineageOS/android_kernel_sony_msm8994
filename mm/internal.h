@@ -17,6 +17,7 @@
 #define __MM_INTERNAL_H
 
 #include <linux/mm.h>
+#include <linux/mm_inline.h>
 
 void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *start_vma,
 		unsigned long floor, unsigned long ceiling);
@@ -219,6 +220,9 @@ static inline int mlocked_vma_newpage(struct vm_area_struct *vma,
 	if (!TestSetPageMlocked(page)) {
 		mod_zone_page_state(page_zone(page), NR_MLOCK,
 				    hpage_nr_pages(page));
+		if (page_is_file_cache(page))
+			mod_zone_page_state(page_zone(page), NR_MLOCK_FILE,
+					hpage_nr_pages(page));
 		count_vm_event(UNEVICTABLE_PGMLOCKED);
 	}
 	return 1;
@@ -253,8 +257,12 @@ static inline void mlock_migrate_page(struct page *newpage, struct page *page)
 
 		local_irq_save(flags);
 		__mod_zone_page_state(page_zone(page), NR_MLOCK, -nr_pages);
+		if (page_is_file_cache(page))
+			__mod_zone_page_state(page_zone(page), NR_MLOCK_FILE, -nr_pages);
 		SetPageMlocked(newpage);
 		__mod_zone_page_state(page_zone(newpage), NR_MLOCK, nr_pages);
+		if (page_is_file_cache(page))
+			__mod_zone_page_state(page_zone(newpage), NR_MLOCK_FILE, nr_pages);
 		local_irq_restore(flags);
 	}
 }
