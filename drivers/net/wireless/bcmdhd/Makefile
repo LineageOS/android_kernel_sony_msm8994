@@ -46,6 +46,8 @@ ifeq ($(BUS_IFACE_PCIE),y)
 	DHDCFLAGS += -DSUPPORT_LINKDOWN_RECOVERY
 	# Enable Firmware Coredump
 	DHDCFLAGS += -DDHD_FW_COREDUMP
+	# Enable packet audit at host side
+	DHDCFLAGS += -DDHD_PKTID_AUDIT_ENABLED
 endif
 
 
@@ -61,6 +63,8 @@ DHDCFLAGS += -DWL_CFG80211
 # Debug
 DHDCFLAGS += -DSIMPLE_MAC_PRINT
 DHDCFLAGS += -DDEBUGFS_CFG80211
+# Enable wakelock debug function
+DHDCFLAGS += -DDHD_TRACE_WAKE_LOCK
 # Print out kernel panic point of file and line info when assertion happened
 DHDCFLAGS += -DBCMASSERT_LOG
 
@@ -166,7 +170,7 @@ DHDCFLAGS += -DCONFIG_HAS_WAKELOCK
 # Used short dwell time during initial scan
 DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 
-#DHDCFLAGS += -DWL_ABORT_SCAN
+DHDCFLAGS += -DWL_ABORT_SCAN
 
 ##############################
 # Android Platform Definition
@@ -263,7 +267,7 @@ endif
 ifeq ($(BUS_IFACE_PCIE),y)
   DHDCFLAGS += -DBCMPCIE_OOB_HOST_WAKE
   DHDCFLAGS += -DCUSTOM_DHD_WATCHDOG_MS=125
-  DHDCFLAGS += -DDHD_USE_IDLECOUNT -DMAX_IDLE_COUNT=16 -DMAX_RESUME_WAIT=100
+  DHDCFLAGS += -DDHD_USE_IDLECOUNT -DMAX_IDLE_COUNT=16 -DMAX_RESUME_WAIT=500
 endif
 
 ifeq ($(CONFIG_ARCH_MSM),y)

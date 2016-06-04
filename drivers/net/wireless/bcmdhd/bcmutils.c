@@ -1,7 +1,7 @@
 /*
  * Driver O/S-independent utility routines
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmutils.c 546106 2015-04-02 09:15:22Z $
+ * $Id: bcmutils.c 617200 2016-02-04 12:23:42Z $
  */
 
 #include <bcm_cfg.h>
@@ -2213,7 +2213,11 @@ bcm_ip_cksum(uint8 *buf, uint32 len, uint32 sum)
  * with savings in not having to use an indirect access, had it been dynamically
  * allocated.
  */
+#ifdef DHD_PKTID_AUDIT_ENABLED
+#define BCM_MWBMAP_ITEMS_MAX    (16 * 1024)  /* May increase to 16K */
+#else
 #define BCM_MWBMAP_ITEMS_MAX    (4 * 1024)  /* May increase to 16K */
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 #define BCM_MWBMAP_BITS_WORD    (NBITS(uint32))
 #define BCM_MWBMAP_WORDS_MAX    (BCM_MWBMAP_ITEMS_MAX / BCM_MWBMAP_BITS_WORD)

@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.c 553989 2015-05-04 02:49:16Z $
+ * $Id: linux_osl.c 614089 2016-01-21 02:43:09Z $
  */
 
 #define LINUX_PORT
@@ -1408,6 +1408,9 @@ dmaaddr_t BCMFASTPATH
 osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_map_t *dmah)
 {
 	int dir;
+	dmaaddr_t ret_addr;
+	dma_addr_t map_addr;
+	int ret;
 
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
 	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
@@ -1443,7 +1446,25 @@ osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_
 	}
 #endif /* __ARM_ARCH_7A__ && BCMDMASGLISTOSL */
 
-	return (pci_map_single(osh->pdev, va, size, dir));
+
+	map_addr = pci_map_single(osh->pdev, va, size, dir);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27))
+	ret = pci_dma_mapping_error(osh->pdev, map_addr);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 5))
+	ret = pci_dma_mapping_error(map_addr);
+#else
+	ret = 0;
+#endif
+	if (ret) {
+		printk("%s: Failed to map memory\n", __FUNCTION__);
+		PHYSADDRLOSET(ret_addr, 0);
+		PHYSADDRHISET(ret_addr, 0);
+	} else {
+		PHYSADDRLOSET(ret_addr, map_addr & 0xffffffff);
+		PHYSADDRHISET(ret_addr, (map_addr >> 32) & 0xffffffff);
+	}
+
+	return ret_addr;
 }
 
 void BCMFASTPATH
@@ -1464,24 +1485,115 @@ osl_cpu_relax(void)
 }
 
 
-#if defined(USE_KMALLOC_FOR_FLOW_RING) && defined(__ARM_ARCH_7A__)
+#if defined(USE_KMALLOC_FOR_FLOW_RING) && defined(__ARM_ARCH_7A__) || \
+	defined(CONFIG_ARCH_MSM8994)
 
+#include <asm/dma-mapping.h>
+
+/*
+ * Note that its gauranteed that the Ring is cache line aligned, but
+ * the messages are not. And we see that __dma_inv_range in
+ * arch/arm64/mm/cache.S invalidates only if the request size is
+ * cache line aligned. If not, it will Clean and invalidate.
+ * So we'll better invalidate the whole ring.
+ *
+ * Also, the latest Kernel versions invoke cache maintenance operations
+ * from arch/arm64/mm/dma-mapping.c, __swiotlb_sync_single_for_device
+ * Only if is_device_dma_coherent returns 0. Since we don't have BSP
+ * source, assuming that its the case, since we pass NULL for the dev ptr
+ */
 inline void BCMFASTPATH
 osl_cache_flush(void *va, uint size)
 {
+	/*
+	 * using long for address arithmatic is OK, in linux
+	 * 32 bit its 4 bytes and 64 bit its 8 bytes
+	 */
+	unsigned long end_cache_line_start;
+	unsigned long end_addr;
+	unsigned long next_cache_line_start;
+
+	end_addr = (unsigned long)va + size;
+
+	/* Start address beyond the cache line we plan to operate */
+	end_cache_line_start = (end_addr & ~(L1_CACHE_BYTES - 1));
+	next_cache_line_start = end_cache_line_start + L1_CACHE_BYTES;
+
+	/* Align the start address to cache line boundary */
+	va = (void *)((unsigned long)va & ~(L1_CACHE_BYTES - 1));
+
+	/* Ensure that size is also aligned and extends partial line to full */
+	size = next_cache_line_start - (unsigned long)va;
+
+
+#ifdef CONFIG_ARM64
+	/*
+	 * virt_to_dma is not present in arm64/include/dma-mapping.h
+	 * So have to convert the va to pa first and then get the dma addr
+	 * of the same.
+	 */
+	{
+		phys_addr_t pa;
+		dma_addr_t dma_addr;
+		pa = virt_to_phys(va);
+		dma_addr = phys_to_dma(NULL, pa);
+		if (size > 0)
+			dma_sync_single_for_device(OSH_NULL, dma_addr, size, DMA_TX);
+	}
+#else
 	if (size > 0)
 		dma_sync_single_for_device(OSH_NULL, virt_to_dma(OSH_NULL, va), size, DMA_TX);
+#endif /* !CONFIG_ARM64 */
 }
 
 inline void BCMFASTPATH
 osl_cache_inv(void *va, uint size)
 {
+	/*
+	 * using long for address arithmatic is OK, in linux
+	 * 32 bit its 4 bytes and 64 bit its 8 bytes
+	 */
+	unsigned long end_cache_line_start;
+	unsigned long end_addr;
+	unsigned long next_cache_line_start;
+
+	end_addr = (unsigned long)va + size;
+
+	/* Start address beyond the cache line we plan to operate */
+	end_cache_line_start = (end_addr & ~(L1_CACHE_BYTES - 1));
+	next_cache_line_start = end_cache_line_start + L1_CACHE_BYTES;
+
+	/* Align the start address to cache line boundary */
+	va = (void *)((unsigned long)va & ~(L1_CACHE_BYTES - 1));
+
+	/* Ensure that size is also aligned and extends partial line to full */
+	size = next_cache_line_start - (unsigned long)va;
+
+#ifdef CONFIG_ARM64
+	/*
+	 * virt_to_dma is not present in arm64/include/dma-mapping.h
+	 * So have to convert the va to pa first and then get the dma addr
+	 * of the same.
+	 */
+	{
+		phys_addr_t pa;
+		dma_addr_t dma_addr;
+		pa = virt_to_phys(va);
+		dma_addr = phys_to_dma(NULL, pa);
+		dma_sync_single_for_cpu(OSH_NULL, dma_addr, size, DMA_RX);
+	}
+#else
 	dma_sync_single_for_cpu(OSH_NULL, virt_to_dma(OSH_NULL, va), size, DMA_RX);
+#endif /* !CONFIG_ARM64 */
+
 }
 
 inline void osl_prefetch(const void *ptr)
 {
+	/* PLD instruction is not applicable in ARM 64. We don't care for now */
+#ifndef CONFIG_ARM64
 	__asm__ __volatile__("pld\t%0" :: "o"(*(char *)ptr) : "cc");
+#endif /* !CONFIG_ARM64 */
 }
 
 int osl_arch_is_coherent(void)

@@ -1,7 +1,7 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * Copyright (C) 2015 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie.h 607503 2015-12-21 05:19:26Z $
+ * $Id: dhd_pcie.h 614103 2016-01-21 04:01:39Z $
  */
 
 
@@ -205,7 +205,7 @@ typedef struct dhd_bus {
 	int32 idlecount;		/* Activity timeout counter */
 	int32 idletime;			/* Control for activity timeout */
 	int32 bus_wake;			/* For wake up the bus */
-	int32 runtime_suspend;		/* For check runtime suspend end */
+	atomic_t runtime_suspend;	/* For check runtime suspend end */
 	bool host_suspend;		/* For checking host is suspended */
 	wait_queue_head_t rpm_queue; /* wait-queue for bus wake up */
 #endif /* DHD_USE_IDLECOUNT */

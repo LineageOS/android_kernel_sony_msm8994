@@ -1,7 +1,7 @@
 /*
  * DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * Copyright (C) 2014 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie.c 607503 2015-12-21 05:19:26Z $
+ * $Id: dhd_pcie.c 633622 2016-04-24 11:50:51Z $
  */
 
 
@@ -55,6 +55,7 @@
 #ifdef DHDTCPACK_SUPPRESS
 #include <dhd_ip.h>
 #endif /* DHDTCPACK_SUPPRESS */
+#include <linux/irq.h>
 
 #include <dhd_somc_custom.h>
 
@@ -415,6 +416,10 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 				DHD_ERROR(("%s : bus is null pointer , exit \n", __FUNCTION__));
 				break;
 			}
+			if (bus->dhd->dongle_reset) {
+				DHD_ERROR(("%s : dongle reset , exit \n", __FUNCTION__));
+				break;
+			}
 
 			if (bus->dhd->busstate == DHD_BUS_DOWN) {
 				DHD_TRACE(("%s : bus is down. we have nothing to do\n",
@@ -432,10 +437,23 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 			/* Count the interrupt call */
 			bus->intrcount++;
 
+			if (bus->ipend && bus->intdis) {
+				if (bus->lastintrs == 0) {
+					bus->lastintrs = bus->intrcount;
+				} else if (bus->intrcount > bus->lastintrs + 10) {
+					DHD_ERROR(("%s : hang recover, lastintrs %d intrcount %d\n",
+						__FUNCTION__, bus->lastintrs, bus->intrcount));
+					bus->lastintrs = 0;
+					dhd_os_send_hang_message(bus->dhd);
+					break;
+				}
+			} else {
+				bus->lastintrs = 0;
+			}
+
 			/* read interrupt status register!! Status bits will be cleared in DPC !! */
 			bus->ipend = TRUE;
 			dhdpcie_bus_intr_disable(bus); /* Disable interrupt!! */
-			bus->intdis = TRUE;
 
 #if defined(PCIE_ISR_THREAD)
 
@@ -612,6 +630,15 @@ dhdpcie_bus_intr_enable(dhd_bus_t *bus)
 	if (!bus || !bus->sih)
 		return;
 
+	bus->intdis = FALSE;
+	if (bus && bus->dev && bus->dev->irq) {
+		struct irq_desc *desc = irq_to_desc(bus->dev->irq);
+		if (desc->depth > 0) {
+			DHD_INTR(("%s enable_irq irq=%d\n", __FUNCTION__,
+				bus->dev->irq));
+			enable_irq(bus->dev->irq);
+		}
+	}
 	if ((bus->sih->buscorerev == 2) || (bus->sih->buscorerev == 6) ||
 		(bus->sih->buscorerev == 4)) {
 		dhpcie_bus_unmask_interrupt(bus);
@@ -639,6 +666,15 @@ dhdpcie_bus_intr_disable(dhd_bus_t *bus)
 		si_corereg(bus->sih, bus->sih->buscoreidx, PCIMailBoxMask,
 			bus->def_intmask, 0);
 	}
+	if (bus && bus->dev && bus->dev->irq) {
+		struct irq_desc *desc = irq_to_desc(bus->dev->irq);
+		if (desc->depth == 0) {
+			DHD_INTR(("%s disable_irq_nosync irq=%d\n", __FUNCTION__,
+				bus->dev->irq));
+			disable_irq_nosync(bus->dev->irq);
+		}
+	}
+	bus->intdis = TRUE;
 
 	DHD_TRACE(("%s Exit\n", __FUNCTION__));
 }
@@ -886,19 +922,19 @@ bool dhd_bus_watchdog(dhd_pub_t *dhd)
 			return FALSE;
 		}
 
-		bus->runtime_suspend = TRUE;
+		atomic_set(&bus->runtime_suspend, 1);
 		DHD_ERROR(("%s: DHD Idle state!! -  idletime :%d, wdtick :%d \n",
 			__FUNCTION__, bus->idletime, dhd_watchdog_ms));
 
 		/* if device suspended, wd needs to turn off */
 		if (dhdpcie_set_suspend_resume(bus->dev, TRUE)) {
 			DHD_ERROR(("%s: runtime suspend failed \n", __FUNCTION__));
-			bus->runtime_suspend = FALSE;
+			atomic_set(&bus->runtime_suspend, 0);
 			return FALSE;
 		}
 		wait_event_interruptible(bus->rpm_queue, bus->bus_wake);
 		dhdpcie_set_suspend_resume(bus->dev, FALSE);
-		bus->runtime_suspend = FALSE;
+		atomic_set(&bus->runtime_suspend, 0);
 		wake_up_interruptible(&bus->rpm_queue);
 		DHD_ERROR(("%s: Runtime resume ended.\n", __FUNCTION__));
 	}
@@ -1487,8 +1523,10 @@ int dhd_bus_rxctl(struct dhd_bus *bus, uchar *msg, uint msglen)
 		bus_wake(bus);
 #endif /* DHD_USE_IDLECOUNT */
 #if defined(DHD_FW_COREDUMP) && defined(CUSTOMER_HW5)
-		/* write core dump to file */
-		dhdpcie_mem_dump(bus);
+		if (bus->dhd->rxcnt_timeout == 0) {
+			/* write core dump to file */
+			dhdpcie_mem_dump(bus);
+		}
 #endif 
 		bus->ioct_resp.cmn_hdr.request_id = 0;
 		bus->ioct_resp.compl_hdr.status = 0xffff;
@@ -1833,6 +1871,21 @@ dhdpcie_mem_dump(dhd_bus_t *bus)
 	int start = bus->dongle_ram_base; /* Start address */
 	int read_size = 0; /* Read size of each iteration */
 	uint8 *buf = NULL, *databuf = NULL;
+
+#ifdef DHD_USE_IDLECOUNT
+	DHD_ERROR(("%s: bus_wake\n", __FUNCTION__));
+	if (!bus_wake(bus)) {
+		DHD_ERROR(("%s: bus_wake failed\n", __FUNCTION__));
+		return BCME_ERROR;
+	}
+#endif /* DHD_USE_IDLECOUNT */
+
+#ifdef SUPPORT_LINKDOWN_RECOVERY
+	if (bus->islinkdown) {
+		DHD_ERROR(("%s: PCIe link is down so skip\n", __FUNCTION__));
+		return BCME_ERROR;
+	}
+#endif /* SUPPORT_LINKDOWN_RECOVERY */
 
 	/* Get full mem size */
 	size = bus->ramsize;
@@ -2962,7 +3015,6 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 				bus->dhd->busstate = DHD_BUS_DOWN;
 			} else {
 				if (bus->intr) {
-					dhdpcie_bus_intr_disable(bus);
 					dhdpcie_free_irq(bus);
 				}
 #ifdef BCMPCIE_OOB_HOST_WAKE
@@ -3672,7 +3724,7 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			/* Got D3 Ack. Suspend the bus */
 			DHD_GENERAL_LOCK(bus->dhd, flags);
 			if (!bus->force_suspend && dhd_os_check_wakelock_all(bus->dhd)) {
-				DHD_ERROR(("%s():Suspend failed because of wakelock"
+				DHD_ERROR(("%s():Suspend failed because of wakelock "
 					"restoring Dongle to D0\n", __FUNCTION__));
 
 				/*
@@ -3721,8 +3773,10 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 			DHD_ERROR(("%s: resumed on timeout for D3 ACK d3ackcnt_timeout %d \n",
 				__FUNCTION__, bus->dhd->d3ackcnt_timeout));
 #if defined(DHD_FW_COREDUMP)
-			/* write core dump to file */
-			dhdpcie_mem_dump(bus);
+			if (bus->dhd->d3ackcnt_timeout == 1) {
+				/* write core dump to file */
+				dhdpcie_mem_dump(bus);
+			}
 #endif /* DHD_FW_COREDUMP */
 			bus->suspended = FALSE;
 			DHD_GENERAL_LOCK(bus->dhd, flags);
@@ -3770,10 +3824,9 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 		DHD_GENERAL_LOCK(bus->dhd, flags);
 		bus->dhd->busstate = DHD_BUS_DATA;
 		DHD_GENERAL_UNLOCK(bus->dhd, flags);
-#ifndef DHD_USE_IDLECOUNT
-		DHD_INFO(("Normal resumed, start net device traffic\n"));
-		netif_wake_queue(netdev);
-#endif /* DHD_USE_IDLECOUNT */
+		DHD_INFO(("Resume completed, start net device traffic\n"));
+		/* resume all interface network queue. */
+		dhd_bus_start_queue(bus);
 		dhdpcie_bus_intr_enable(bus);
 #ifdef DHD_USE_IDLECOUNT
 		/* wake up host controller if suspend with runtime PM */
@@ -4241,7 +4294,9 @@ dhd_bus_ringbell(struct dhd_bus *bus, uint32 value)
 static void
 dhd_bus_ringbell_fast(struct dhd_bus *bus, uint32 value)
 {
-	W_REG(bus->pcie_mb_intr_osh, bus->pcie_mb_intr_addr, value);
+	if (bus->pcie_mb_intr_addr) {
+		W_REG(bus->pcie_mb_intr_osh, bus->pcie_mb_intr_addr, value);
+	}
 }
 
 static void
@@ -4280,15 +4335,20 @@ dhd_bus_dpc(struct dhd_bus *bus)
 	uint32 intstatus = 0;
 	uint32 newstatus = 0;
 	bool resched = FALSE;	  /* Flag indicating resched wanted */
+	unsigned long flags;
 
-	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
+	DHD_INTR(("%s: Enter\n", __FUNCTION__));
 
+	DHD_GENERAL_LOCK(bus->dhd, flags);
 	if (bus->dhd->busstate == DHD_BUS_DOWN) {
 		DHD_ERROR(("%s: Bus down, ret\n", __FUNCTION__));
 		bus->intstatus = 0;
+		DHD_GENERAL_UNLOCK(bus->dhd, flags);
 		return 0;
 	}
+	DHD_GENERAL_UNLOCK(bus->dhd, flags);
 
+	bus->ipend = FALSE;
 	intstatus = bus->intstatus;
 
 	if ((bus->sih->buscorerev == 6) || (bus->sih->buscorerev == 4) ||
@@ -4312,8 +4372,13 @@ dhd_bus_dpc(struct dhd_bus *bus)
 		}
 	}
 
-	if (!resched)
+	if (!resched) {
+		bus->intstatus = 0;
+		DHD_INTR(("%s: enable PCIE interrupts\n", __FUNCTION__));
 		dhdpcie_bus_intr_enable(bus);
+	}
+
+	DHD_INTR(("%s: Exit %d\n", __FUNCTION__, resched));
 	return resched;
 
 }
@@ -4324,6 +4389,7 @@ dhdpcie_send_mb_data(dhd_bus_t *bus, uint32 h2d_mb_data)
 {
 	uint32 cur_h2d_mb_data = 0;
 
+	DHD_INFO_HW4(("%s: H2D_MB_DATA: 0x%08X\n", __FUNCTION__, h2d_mb_data));
 	dhd_bus_cmn_readshared(bus, &cur_h2d_mb_data, HTOD_MB_DATA, 0);
 
 	if (cur_h2d_mb_data != 0) {
@@ -4362,12 +4428,15 @@ dhdpcie_handle_mb_data(dhd_bus_t *bus)
 #endif /* DHD_USE_IDLECOUNT */
 
 	dhd_bus_cmn_readshared(bus, &d2h_mb_data, DTOH_MB_DATA, 0);
-	if (!d2h_mb_data)
+	if (D2H_DEV_MB_INVALIDATED(d2h_mb_data)) {
+		DHD_INFO_HW4(("%s: Invalid D2H_MB_DATA: 0x%08x\n",
+			__FUNCTION__, d2h_mb_data));
 		return;
+	}
 
 	dhd_bus_cmn_writeshared(bus, &zero, sizeof(uint32), DTOH_MB_DATA, 0);
 
-	DHD_INFO(("D2H_MB_DATA: 0x%04x\n", d2h_mb_data));
+	DHD_INFO_HW4(("D2H_MB_DATA: 0x%08x\n", d2h_mb_data));
 	if (d2h_mb_data & D2H_DEV_DS_ENTER_REQ)  {
 		/* what should we do */
 		DHD_INFO(("D2H_MB_DATA: DEEP SLEEP REQ\n"));
@@ -4769,6 +4838,7 @@ int dhd_bus_init(dhd_pub_t *dhdp, bool enforce_mutex)
 	bus->idlecount = 0;
 	bus->idletime = (int32)MAX_IDLE_COUNT;
 	bus->host_suspend = FALSE;
+	atomic_set(&bus->runtime_suspend, 0);
 	init_waitqueue_head(&bus->rpm_queue);
 #endif /* DHD_USE_IDLECOUNT */
 
@@ -5274,6 +5344,13 @@ dhd_bus_release_dongle(struct dhd_bus *bus)
 }
 
 #ifdef DHD_USE_IDLECOUNT
+bool dhd_bus_is_resume_done(dhd_pub_t *dhdp)
+{
+	dhd_bus_t *bus = dhdp->bus;
+
+	return (atomic_read(&bus->runtime_suspend) == 0);
+}
+
 bool bus_wake(dhd_bus_t *bus)
 {
 	int retry = 0;
@@ -5293,13 +5370,16 @@ bool bus_wake(dhd_bus_t *bus)
 		bus->bus_wake = 1;
 		wake_up_interruptible(&bus->rpm_queue);
 		SMP_RD_BARRIER_DEPENDS();
-		while (bus->runtime_suspend && retry++ != MAX_RESUME_WAIT) {
+		while (atomic_read(&bus->runtime_suspend) && retry++ != MAX_RESUME_WAIT) {
 			SMP_RD_BARRIER_DEPENDS();
-			wait_event_interruptible_timeout(bus->rpm_queue, !bus->runtime_suspend,
+			wait_event_interruptible_timeout(bus->rpm_queue,
+				!atomic_read(&bus->runtime_suspend),
 				msecs_to_jiffies(1));
 		}
-		DHD_INFO(("%s wakeup the bus with retry count : %d \n", __FUNCTION__, retry));
-		if (bus->runtime_suspend) {
+		DHD_ERROR(("%s wakeup the bus with retry count : %d \n", __FUNCTION__, retry));
+		if (atomic_read(&bus->runtime_suspend)) {
+			DHD_ERROR(("%s wakeup the bus failed with retry count : %d\n",
+				__FUNCTION__, retry));
 			return FALSE;
 		}
 	}

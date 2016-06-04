@@ -4,7 +4,7 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_msgbuf.c 580172 2015-08-18 10:25:34Z $
+ * $Id: dhd_msgbuf.c 633622 2016-04-24 11:50:51Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -64,7 +64,10 @@
  * memory location for the dongle to read.
  */
 #define PCIE_D2H_SYNC
-#define PCIE_D2H_SYNC_WAIT_TRIES    512
+#define PCIE_D2H_SYNC_WAIT_TRIES    	(512UL)
+#define PCIE_D2H_SYNC_NUM_OF_STEPS	(3UL)
+#define PCIE_D2H_SYNC_DELAY		(50UL)	/* in terms of usecs */
+
 #if !defined(CONFIG_ARCH_MSM8994)
 #define PCIE_D2H_SYNC_BZERO /* bzero a message before updating the RD offset */
 #endif 
@@ -305,7 +308,7 @@ static dhd_msgbuf_func_t table_lookup[DHD_PROT_FUNCS] = {
  * does not require host participation, then a noop callback handler will be
  * bound that simply returns the msgtype.
  */
-static void dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, uint32 seqnum,
+static void dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, msgbuf_ring_t *ring,
                                        uint32 tries, uchar *msg, int msglen);
 static uint8 dhd_prot_d2h_sync_seqnum(dhd_pub_t *dhd, msgbuf_ring_t *ring,
                                       volatile cmn_msg_hdr_t *msg, int msglen);
@@ -317,12 +320,15 @@ static void dhd_prot_d2h_sync_init(dhd_pub_t *dhd, dhd_prot_t * prot);
 
 /* Debug print a livelock avert by dropping a D2H message */
 static void
-dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, uint32 seqnum, uint32 tries,
+dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, msgbuf_ring_t *ring, uint32 tries,
                            uchar *msg, int msglen)
 {
-	DHD_ERROR(("LIVELOCK DHD<%p> seqnum<%u:%u> tries<%u> max<%lu> tot<%lu>\n",
-		dhd, seqnum, seqnum% D2H_EPOCH_MODULO, tries,
-		dhd->prot->d2h_sync_wait_max, dhd->prot->d2h_sync_wait_tot));
+	uint32 seqnum = ring->seqnum;
+	DHD_ERROR(("LIVELOCK DHD<%p> name<%s> seqnum<%u:%u> tries<%u> max<%lu> tot<%lu>"
+		"msg<%p>\n",
+		dhd, ring->name, seqnum, seqnum% D2H_EPOCH_MODULO, tries,
+		dhd->prot->d2h_sync_wait_max, dhd->prot->d2h_sync_wait_tot,
+		msg));
 	prhex("D2H MsgBuf Failure", (uchar *)msg, msglen);
 
 #if defined(SUPPORT_LINKDOWN_RECOVERY) && defined(CONFIG_ARCH_MSM)
@@ -342,32 +348,63 @@ dhd_prot_d2h_sync_seqnum(dhd_pub_t *dhd, msgbuf_ring_t *ring,
 	int num_words = msglen / sizeof(uint32); /* num of 32bit words */
 	volatile uint32 *marker = (uint32 *)msg + (num_words - 1); /* last word */
 	dhd_prot_t *prot = dhd->prot;
+	uint32 step = 0;
+	uint32 delay = PCIE_D2H_SYNC_DELAY;
+	uint32 total_tries = 0;
 
 	ASSERT(msglen == RING_LEN_ITEMS(ring));
 
-	for (tries = 0; tries < PCIE_D2H_SYNC_WAIT_TRIES; tries++) {
-		uint32 msg_seqnum = *marker;
-		if (ltoh32(msg_seqnum) == ring_seqnum) { /* dma upto last word done */
-			ring->seqnum++; /* next expected sequence number */
-			goto dma_completed;
-		}
+	BCM_REFERENCE(delay);
 
-		if (tries > prot->d2h_sync_wait_max)
-			prot->d2h_sync_wait_max = tries;
+	/*
+	 * For retries we have to make some sort of stepper algorithm.
+	 * We see that every time when the Dongle comes out of the D3
+	 * Cold state, the first D2H mem2mem DMA takes more time to
+	 * complete, leading to livelock issues.
+	 *
+	 * Case 1 - Apart from Host CPU some other bus master is
+	 * accessing the DDR port, probably page close to the ring
+	 * so, PCIE does not get a change to update the memory.
+	 * Solution - Increase the number of tries.
+	 *
+	 * Case 2 - The 50usec delay given by the Host CPU is not
+	 * sufficient for the PCIe RC to start its work.
+	 * In this case the breathing time of 50usec given by
+	 * the Host CPU is not sufficient.
+	 * Solution: Increase the delay in a stepper fashion.
+	 * This is done to ensure that there are no
+	 * unwanted extra delay introdcued in normal conditions.
+	 */
+	for (step = 1; step <= PCIE_D2H_SYNC_NUM_OF_STEPS; step++) {
+		for (tries = 1; tries <= PCIE_D2H_SYNC_WAIT_TRIES; tries++) {
+			uint32 msg_seqnum = *marker;
+			if (ltoh32(msg_seqnum) == ring_seqnum) { /* dma upto last word done */
+				ring->seqnum++; /* next expected sequence number */
+				goto dma_completed;
+			}
 
-		OSL_CACHE_INV(msg, msglen); /* invalidate and try again */
-		OSL_CPU_RELAX(); /* CPU relax for msg_seqnum  value to update */
+			total_tries = ((step-1) * PCIE_D2H_SYNC_WAIT_TRIES) + tries;
 
-	} /* for PCIE_D2H_SYNC_WAIT_TRIES */
+			if (total_tries > prot->d2h_sync_wait_max)
+				prot->d2h_sync_wait_max = total_tries;
 
-	dhd_prot_d2h_sync_livelock(dhd, ring->seqnum, tries, (uchar *)msg, msglen);
+			OSL_CACHE_INV(msg, msglen); /* invalidate and try again */
+			OSL_CPU_RELAX(); /* CPU relax for msg_seqnum  value to update */
+#if defined(CONFIG_ARCH_MSM8994)
+			/* For ARM there is no pause in cpu_relax, so add extra delay */
+			OSL_DELAY(delay * step);
+#endif /* defined(CONFIG_ARCH_MSM8994) */
+		} /* for PCIE_D2H_SYNC_WAIT_TRIES */
+	} /* for number of steps */
+
+	dhd_prot_d2h_sync_livelock(dhd, ring, total_tries, (uchar *)msg, msglen);
 
 	ring->seqnum++; /* skip this message ... leak of a pktid */
 	return 0; /* invalid msgtype 0 -> noop callback */
 
 dma_completed:
 
-	prot->d2h_sync_wait_tot += tries;
+	prot->d2h_sync_wait_tot += total_tries;
 	return msg->msg_type;
 }
 
@@ -381,34 +418,65 @@ dhd_prot_d2h_sync_xorcsum(dhd_pub_t *dhd, msgbuf_ring_t *ring,
 	int num_words = msglen / sizeof(uint32); /* num of 32bit words */
 	uint8 ring_seqnum = ring->seqnum % D2H_EPOCH_MODULO;
 	dhd_prot_t *prot = dhd->prot;
+	uint32 step = 0;
+	uint32 delay = PCIE_D2H_SYNC_DELAY;
+	uint32 total_tries = 0;
 
 	ASSERT(msglen == RING_LEN_ITEMS(ring));
 
-	for (tries = 0; tries < PCIE_D2H_SYNC_WAIT_TRIES; tries++) {
-		prot_checksum = bcm_compute_xor32((volatile uint32 *)msg, num_words);
-		if (prot_checksum == 0U) { /* checksum is OK */
-			if (msg->epoch == ring_seqnum) {
-				ring->seqnum++; /* next expected sequence number */
-				goto dma_completed;
+	BCM_REFERENCE(delay);
+
+	/*
+	 * For retries we have to make some sort of stepper algorithm.
+	 * We see that every time when the Dongle comes out of the D3
+	 * Cold state, the first D2H mem2mem DMA takes more time to
+	 * complete, leading to livelock issues.
+	 *
+	 * Case 1 - Apart from Host CPU some other bus master is
+	 * accessing the DDR port, probably page close to the ring
+	 * so, PCIE does not get a change to update the memory.
+	 * Solution - Increase the number of tries.
+	 *
+	 * Case 2 - The 50usec delay given by the Host CPU is not
+	 * sufficient for the PCIe RC to start its work.
+	 * In this case the breathing time of 50usec given by
+	 * the Host CPU is not sufficient.
+	 * Solution: Increase the delay in a stepper fashion.
+	 * This is done to ensure that there are no
+	 * unwanted extra delay introdcued in normal conditions.
+	 */
+	for (step = 1; step <= PCIE_D2H_SYNC_NUM_OF_STEPS; step++) {
+		for (tries = 1; tries <= PCIE_D2H_SYNC_WAIT_TRIES; tries++) {
+			prot_checksum = bcm_compute_xor32((volatile uint32 *)msg, num_words);
+			if (prot_checksum == 0U) { /* checksum is OK */
+				if (msg->epoch == ring_seqnum) {
+					ring->seqnum++; /* next expected sequence number */
+					goto dma_completed;
+				}
 			}
-		}
 
-		if (tries > prot->d2h_sync_wait_max)
-			prot->d2h_sync_wait_max = tries;
+			total_tries = ((step-1) * PCIE_D2H_SYNC_WAIT_TRIES) + tries;
 
-		OSL_CACHE_INV(msg, msglen); /* invalidate and try again */
-		OSL_CPU_RELAX(); /* CPU relax for msg_seqnum  value to update */
+			if (total_tries > prot->d2h_sync_wait_max)
+				prot->d2h_sync_wait_max = total_tries;
 
-	} /* for PCIE_D2H_SYNC_WAIT_TRIES */
+			OSL_CACHE_INV(msg, msglen); /* invalidate and try again */
+			OSL_CPU_RELAX(); /* CPU relax for msg_seqnum  value to update */
+#if defined(CONFIG_ARCH_MSM8994)
+			/* For ARM there is no pause in cpu_relax, so add extra delay */
+			OSL_DELAY(delay * step);
+#endif /* defined(CONFIG_ARCH_MSM8994) */
+		} /* for PCIE_D2H_SYNC_WAIT_TRIES */
+	} /* for number of steps */
 
-	dhd_prot_d2h_sync_livelock(dhd, ring->seqnum, tries, (uchar *)msg, msglen);
+	dhd_prot_d2h_sync_livelock(dhd, ring, total_tries, (uchar *)msg, msglen);
 
 	ring->seqnum++; /* skip this message ... leak of a pktid */
 	return 0; /* invalid msgtype 0 -> noop callback */
 
 dma_completed:
 
-	prot->d2h_sync_wait_tot += tries;
+	prot->d2h_sync_wait_tot += total_tries;
 	return msg->msg_type;
 }
 
@@ -452,6 +520,83 @@ dhd_prot_d2h_sync_init(dhd_pub_t *dhd, dhd_prot_t * prot)
  */
 
 /*
+ * PktId (Locker) #0 is never allocated and is considered invalid.
+ *
+ * On request for a pktid, a value DHD_PKTID_INVALID must be treated as a
+ * depleted pktid pool and must not be used by the caller.
+ *
+ * Likewise, a caller must never free a pktid of value DHD_PKTID_INVALID.
+ */
+#define DHD_PKTID_INVALID	(0U)
+#define DHD_IOCTL_REQ_PKTID	0xFFFE
+
+
+#define MAX_PKTID_ITEMS		(8192) /* Maximum number of pktids supported */
+
+/*
+ * DHD_PKTID_AUDIT_ENABLED: Audit of PktIds in DHD for duplicate alloc and frees
+ *
+ * DHD_PKTID_AUDIT_MAP: Audit the LIFO or FIFO PktIdMap allocator
+ * DHD_PKTID_AUDIT_RING: Audit the pktid during producer/consumer ring operation
+ *
+ * CAUTION: When DHD_PKTID_AUDIT_ENABLED is defined,
+ *    either DHD_PKTID_AUDIT_MAP or DHD_PKTID_AUDIT_RING may be selected.
+ */
+
+/* Disable Host side Pktid Audit, enabling this makes the mem corruption
+ * problem disappear
+ */
+/* #define DHD_PKTID_AUDIT_ENABLED */
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+
+/* Audit the pktidmap allocator */
+/* #define DHD_PKTID_AUDIT_MAP */
+
+/* Audit the pktid during production/consumption of workitems */
+#define DHD_PKTID_AUDIT_RING
+
+#if defined(DHD_PKTID_AUDIT_MAP) && defined(DHD_PKTID_AUDIT_RING)
+#error "May only enabled audit of MAP or RING, at a time."
+#endif /* DHD_PKTID_AUDIT_MAP && DHD_PKTID_AUDIT_RING */
+
+#define DHD_DUPLICATE_ALLOC	1
+#define DHD_DUPLICATE_FREE	2
+#define DHD_TEST_IS_ALLOC	3
+#define DHD_TEST_IS_FREE	4
+
+#define USE_DHD_PKTID_AUDIT_LOCK 1
+
+#ifdef USE_DHD_PKTID_AUDIT_LOCK
+#define DHD_PKTID_AUDIT_LOCK_INIT(osh)		dhd_os_spin_lock_init(osh)
+#define DHD_PKTID_AUDIT_LOCK_DEINIT(osh, lock)	dhd_os_spin_lock_deinit(osh, lock)
+#define DHD_PKTID_AUDIT_LOCK(lock)		dhd_os_spin_lock(lock)
+#define DHD_PKTID_AUDIT_UNLOCK(lock, flags)	dhd_os_spin_unlock(lock, flags)
+
+#else
+
+#define DHD_PKTID_AUDIT_LOCK_INIT(osh)		(void *)(1)
+#define DHD_PKTID_AUDIT_LOCK_DEINIT(osh, lock)	do { /* noop */ } while (0)
+#define DHD_PKTID_AUDIT_LOCK(lock)		0
+#define DHD_PKTID_AUDIT_UNLOCK(lock, flags)	do { /* noop */ } while (0)
+
+#endif /* !USE_DHD_PKTID_AUDIT_LOCK */
+
+#endif /* DHD_PKTID_AUDIT_ENABLED */
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+/*
+ * Going back to 1 from 2, we are any way using LIFO method now.
+ * Also note that if this is 2 then our times would 2 * 8192 + 1
+ * But the bit map is only for 16K. Increasing the bitmap size for
+ * more than 16K failed. So doing this change to fit in into the
+ * bit map size.
+ */
+#define DHD_PKTIDMAP_FIFO	1
+
+#else /* DHD_PKTID_AUDIT_ENABLED */
+
+/*
  * Uses a FIFO dll with Nx more pktids instead of a LIFO stack.
  * If you wish to enable pktidaudit in firmware with FIFO PktId allocator, then
  * the total number of PktIds managed by the pktidaudit must be multiplied by
@@ -459,7 +604,7 @@ dhd_prot_d2h_sync_init(dhd_pub_t *dhd, dhd_prot_t * prot)
  */
 #define DHD_PKTIDMAP_FIFO  4
 
-#define MAX_PKTID_ITEMS     (8192) /* Maximum number of pktids supported */
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 typedef void * dhd_pktid_map_handle_t; /* opaque handle to a pktid map */
 
@@ -486,8 +631,6 @@ static void *dhd_pktid_map_free(dhd_pktid_map_handle_t *map, uint32 id,
                                 dmaaddr_t *physaddr, uint32 *len,
                                 uint8 buf_type);
 
-#define USE_DHD_PKTID_LOCK   1
-
 #ifdef USE_DHD_PKTID_LOCK
 #define DHD_PKTID_LOCK_INIT(osh)                dhd_os_spin_lock_init(osh)
 #define DHD_PKTID_LOCK_DEINIT(osh, lock)        dhd_os_spin_lock_deinit(osh, lock)
@@ -495,9 +638,15 @@ static void *dhd_pktid_map_free(dhd_pktid_map_handle_t *map, uint32 id,
 #define DHD_PKTID_UNLOCK(lock, flags)           dhd_os_spin_unlock(lock, flags)
 #else
 #define DHD_PKTID_LOCK_INIT(osh)                (void *)(1)
-#define DHD_PKTID_LOCK_DEINIT(osh, lock)        do { /* noop */ } while (0)
+#define DHD_PKTID_LOCK_DEINIT(osh, lock)	do { \
+							BCM_REFERENCE(osh); \
+							BCM_REFERENCE(lock); \
+						} while (0)
 #define DHD_PKTID_LOCK(lock)                    0
-#define DHD_PKTID_UNLOCK(lock, flags)           do { /* noop */ } while (0)
+#define DHD_PKTID_UNLOCK(lock, flags)		do { \
+							BCM_REFERENCE(lock); \
+							BCM_REFERENCE(flags); \
+						} while (0)
 #endif /* !USE_DHD_PKTID_LOCK */
 
 /* Packet metadata saved in packet id mapper */
@@ -533,6 +682,12 @@ typedef struct dhd_pktid_map {
 	uint32		failures; /* lockers unavailable count */
 	/* Spinlock to protect dhd_pktid_map in process/tasklet context */
 	void        *pktid_lock; /* Used when USE_DHD_PKTID_LOCK is defined */
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+	void	*pktid_audit_lock;
+	struct bcm_mwbmap *pktid_audit; /* multi word bitmap based audit */
+#endif /* DHD_PKTID_AUDIT_ENABLED */
+
 	/* Unique PktId Allocator: FIFO dll, or LIFO:stack of keys */
 #if defined(DHD_PKTIDMAP_FIFO)
 	dll_t	list_free; /* allocate from head, free to tail */
@@ -542,17 +697,6 @@ typedef struct dhd_pktid_map {
 #endif /* ! DHD_PKTIDMAP_FIFO */
 	dhd_pktid_item_t lockers[0];           /* metadata storage */
 } dhd_pktid_map_t;
-
-/*
- * PktId (Locker) #0 is never allocated and is considered invalid.
- *
- * On request for a pktid, a value DHD_PKTID_INVALID must be treated as a
- * depleted pktid pool and must not be used by the caller.
- *
- * Likewise, a caller must never free a pktid of value DHD_PKTID_INVALID.
- */
-#define DHD_PKTID_INVALID               (0U)
-#define DHD_IOCTL_REQ_PKTID		0xFFFE
 
 #define DHD_PKTID_ITEM_SZ               (sizeof(dhd_pktid_item_t))
 
@@ -583,6 +727,105 @@ typedef struct dhd_pktid_map {
 		(dmaaddr_t *)&(pa), (uint32 *)&(len), (uint8)buf_type)
 
 #define PKTID_AVAIL(map)                 dhd_pktid_map_avail_cnt(map)
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+
+static int dhd_pktid_audit(dhd_pktid_map_t *pktid_map, uint32 pktid,
+	const int test_for, const char *errmsg);
+
+static int
+dhd_pktid_audit(dhd_pktid_map_t *pktid_map, uint32 pktid, const int test_for,
+	const char *errmsg)
+{
+#define DHD_PKT_AUDIT_STR "ERROR: %16s Host PktId Audit: "
+
+#if defined(DHD_PKTIDMAP_FIFO)
+	const uint32 max_pktid_items = (MAX_PKTID_ITEMS * DHD_PKTIDMAP_FIFO);
+#else
+	const uint32 max_pktid_items = (MAX_PKTID_ITEMS);
+#endif /* DHD_PKTIDMAP_FIFO */
+	struct bcm_mwbmap *handle;
+	u32	flags;
+
+	if (pktid_map == (dhd_pktid_map_t *)NULL) {
+		DHD_ERROR((DHD_PKT_AUDIT_STR "Pkt id map NULL\n", errmsg));
+		return BCME_OK;
+	}
+
+	flags = DHD_PKTID_AUDIT_LOCK(pktid_map->pktid_audit_lock);
+
+	handle = pktid_map->pktid_audit;
+	if (handle == (struct bcm_mwbmap *)NULL) {
+		DHD_ERROR((DHD_PKT_AUDIT_STR "Handle NULL\n", errmsg));
+		DHD_PKTID_AUDIT_UNLOCK(pktid_map->pktid_audit_lock, flags);
+		return BCME_OK;
+	}
+
+	if ((pktid == DHD_PKTID_INVALID) || (pktid > max_pktid_items)) {
+		DHD_ERROR((DHD_PKT_AUDIT_STR "PktId<%d> invalid\n", errmsg, pktid));
+		/* lock is released in "error" */
+		goto error;
+	}
+
+	if (pktid == DHD_IOCTL_REQ_PKTID) {
+		DHD_PKTID_AUDIT_UNLOCK(pktid_map->pktid_audit_lock, flags);
+		return BCME_OK;
+	}
+
+	switch (test_for) {
+		case DHD_DUPLICATE_ALLOC:
+			if (!bcm_mwbmap_isfree(handle, pktid)) {
+				DHD_ERROR((DHD_PKT_AUDIT_STR "PktId<%d> alloc duplicate\n",
+					errmsg, pktid));
+				goto error;
+			}
+			bcm_mwbmap_force(handle, pktid);
+			break;
+
+		case DHD_DUPLICATE_FREE:
+			if (bcm_mwbmap_isfree(handle, pktid)) {
+				DHD_ERROR((DHD_PKT_AUDIT_STR "PktId<%d> free duplicate\n",
+					errmsg, pktid));
+				goto error;
+			}
+			bcm_mwbmap_free(handle, pktid);
+			break;
+
+		case DHD_TEST_IS_ALLOC:
+			if (bcm_mwbmap_isfree(handle, pktid)) {
+				DHD_ERROR((DHD_PKT_AUDIT_STR "PktId<%d> is not allocated\n",
+					errmsg, pktid));
+				goto error;
+			}
+			break;
+
+		case DHD_TEST_IS_FREE:
+			if (!bcm_mwbmap_isfree(handle, pktid)) {
+				DHD_ERROR((DHD_PKT_AUDIT_STR "PktId<%d> is not free",
+					errmsg, pktid));
+				goto error;
+			}
+			break;
+
+		default:
+			goto error;
+	}
+
+	DHD_PKTID_AUDIT_UNLOCK(pktid_map->pktid_audit_lock, flags);
+	return BCME_OK;
+
+error:
+
+	DHD_PKTID_AUDIT_UNLOCK(pktid_map->pktid_audit_lock, flags);
+	/* May insert any trap mechanism here ! */
+	ASSERT(0);
+	return BCME_ERROR;
+}
+
+#define DHD_PKTID_AUDIT(map, pktid, test_for) \
+	dhd_pktid_audit((dhd_pktid_map_t *)(map), (pktid), (test_for), __FUNCTION__)
+
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 /*
  * +---------------------------------------------------------------------------+
@@ -620,7 +863,7 @@ dhd_pktid_map_init(dhd_pub_t *dhd, uint32 num_items)
 		dhd_pktid_map_sz)) == NULL) {
 		DHD_ERROR(("%s:%d: MALLOC failed for size %d\n",
 			__FUNCTION__, __LINE__, dhd_pktid_map_sz));
-		return NULL;
+		goto error;
 	}
 	bzero(map, dhd_pktid_map_sz);
 
@@ -636,6 +879,17 @@ dhd_pktid_map_init(dhd_pub_t *dhd, uint32 num_items)
 	map->avail = num_items;
 
 	map_items = DHD_PKIDMAP_ITEMS(map->items);
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+	/* Incarnate a hierarchical multiword bitmap for auditing pktid allocator */
+	map->pktid_audit = bcm_mwbmap_init(dhd->osh, map_items + 1);
+	if (map->pktid_audit == (struct bcm_mwbmap *)NULL) {
+		DHD_ERROR(("%s:%d: pktid_audit init failed\r\n", __FUNCTION__, __LINE__));
+		goto error;
+	}
+
+	map->pktid_audit_lock = DHD_PKTID_AUDIT_LOCK_INIT(dhd->osh);
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 #if defined(DHD_PKTIDMAP_FIFO)
 
@@ -677,11 +931,26 @@ dhd_pktid_map_init(dhd_pub_t *dhd, uint32 num_items)
 	map->lockers[DHD_PKTID_INVALID].pkt   = NULL; /* bzero: redundant */
 	map->lockers[DHD_PKTID_INVALID].len   = 0;
 
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+	/* do not use dhd_pktid_audit() here, use bcm_mwbmap_force directly */
+	bcm_mwbmap_force(map->pktid_audit, DHD_PKTID_INVALID);
+#endif /* DHD_PKTID_AUDIT_ENABLED */
+
 	return (dhd_pktid_map_handle_t *)map; /* opaque handle */
 
 error:
 
 	if (map) {
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+		if (map->pktid_audit != (struct bcm_mwbmap *)NULL) {
+			bcm_mwbmap_fini(dhd->osh, map->pktid_audit); /* Destruct pktid_audit */
+			map->pktid_audit = (struct bcm_mwbmap *)NULL;
+			if (map->pktid_audit_lock) {
+				DHD_PKTID_AUDIT_LOCK_DEINIT(dhd->osh, map->pktid_audit_lock);
+			}
+		}
+#endif /* DHD_PKTID_AUDIT_ENABLED */
+
 		if (map->pktid_lock) {
 			DHD_PKTID_LOCK_DEINIT(dhd->osh, map->pktid_lock);
 		}
@@ -726,6 +995,9 @@ dhd_pktid_map_fini(dhd_pktid_map_handle_t *handle)
 		if (locker->inuse == TRUE) { /* numbered key still in use */
 			locker->inuse = FALSE; /* force open the locker */
 
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+			DHD_PKTID_AUDIT(map, nkey, DHD_DUPLICATE_FREE); /* duplicate frees */
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 			{
 				if (!PHYSADDRISZERO(locker->physaddr)) {
 					/* This could be a callback registered with dhd_pktid_map */
@@ -754,9 +1026,25 @@ dhd_pktid_map_fini(dhd_pktid_map_handle_t *handle)
 				}
 			}
 		}
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+		else {
+			DHD_PKTID_AUDIT(map, nkey, DHD_TEST_IS_FREE);
+		}
+#endif /* DHD_PKTID_AUDIT_ENABLED */
+
 		locker->pkt = NULL; /* clear saved pkt */
 		locker->len = 0;
 	}
+
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+	if (map->pktid_audit != (struct bcm_mwbmap *)NULL) {
+		bcm_mwbmap_fini(osh, map->pktid_audit); /* Destruct pktid_audit */
+		map->pktid_audit = (struct bcm_mwbmap *)NULL;
+		if (map->pktid_audit_lock) {
+			DHD_PKTID_AUDIT_LOCK_DEINIT(osh, map->pktid_audit_lock);
+		}
+	}
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 	DHD_PKTID_UNLOCK(map->pktid_lock, flags);
 	DHD_PKTID_LOCK_DEINIT(map->dhd->osh, map->pktid_lock);
@@ -780,7 +1068,7 @@ dhd_pktid_map_clear(dhd_pktid_map_handle_t *handle)
 		return;
 
 	map = (dhd_pktid_map_t *)handle;
-	flags  = DHD_PKTID_LOCK(map->pktid_lock);
+	flags = DHD_PKTID_LOCK(map->pktid_lock);
 
 	osh = map->dhd->osh;
 	map->failures = 0;
@@ -797,6 +1085,9 @@ dhd_pktid_map_clear(dhd_pktid_map_handle_t *handle)
 
 		if (locker->inuse == TRUE) { /* numbered key still in use */
 			locker->inuse = FALSE; /* force open the locker */
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+			DHD_PKTID_AUDIT(map, nkey, DHD_DUPLICATE_FREE); /* duplicate frees */
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 #if defined(DHD_PKTIDMAP_FIFO)
 			ASSERT(locker->nkey == nkey);
@@ -830,6 +1121,11 @@ dhd_pktid_map_clear(dhd_pktid_map_handle_t *handle)
 #endif /* CONFIG_DHD_USE_STATIC_BUF && DHD_USE_STATIC_IOCTLBUF */
 			}
 		}
+#if defined(DHD_PKTID_AUDIT_ENABLED)
+		else {
+			DHD_PKTID_AUDIT(map, nkey, DHD_TEST_IS_FREE);
+		}
+#endif /* DHD_PKTID_AUDIT_ENABLED */
 
 		locker->pkt = NULL; /* clear saved pkt */
 		locker->len = 0;
@@ -908,6 +1204,10 @@ __dhd_pktid_map_reserve(dhd_pktid_map_handle_t *handle, void *pkt)
 	locker->pkt = pkt; /* pkt is saved, other params not yet saved. */
 	locker->len = 0;
 
+#if defined(DHD_PKTID_AUDIT_MAP)
+	DHD_PKTID_AUDIT(map, nkey, DHD_DUPLICATE_ALLOC); /* Audit duplicate alloc */
+#endif /* DHD_PKTID_AUDIT_MAP */
+
 	ASSERT(nkey != DHD_PKTID_INVALID);
 	return nkey; /* return locker's numbered key */
 }
@@ -943,6 +1243,10 @@ __dhd_pktid_map_save(dhd_pktid_map_handle_t *handle, void *pkt, uint32 nkey,
 
 	locker = &map->lockers[nkey];
 	ASSERT((locker->pkt == pkt) && (locker->inuse == TRUE));
+
+#if defined(DHD_PKTID_AUDIT_MAP)
+	DHD_PKTID_AUDIT(map, nkey, DHD_TEST_IS_ALLOC); /* apriori, reservation */
+#endif /* DHD_PKTID_AUDIT_MAP */
 
 	locker->dma = dma; /* store contents in locker */
 	locker->buf_type = buf_type;
@@ -982,6 +1286,9 @@ dhd_pktid_map_alloc(dhd_pktid_map_handle_t *handle, void *pkt,
 	if (nkey != DHD_PKTID_INVALID) {
 		__dhd_pktid_map_save(handle, pkt, nkey, physaddr, len,
 			dma, buf_type);
+#if defined(DHD_PKTID_AUDIT_MAP)
+		DHD_PKTID_AUDIT(map, nkey, DHD_TEST_IS_ALLOC); /* apriori, reservation */
+#endif /* DHD_PKTID_AUDIT_MAP */
 	}
 
 	DHD_PKTID_UNLOCK(map->pktid_lock, flags);
@@ -1020,6 +1327,10 @@ dhd_pktid_map_free(dhd_pktid_map_handle_t *handle, uint32 nkey,
 #endif /* CUSTOMER_HW5 */
 
 	locker = &map->lockers[nkey];
+
+#if defined(DHD_PKTID_AUDIT_MAP)
+	DHD_PKTID_AUDIT(map, nkey, DHD_DUPLICATE_FREE); /* Audit duplicate FREE */
+#endif /* DHD_PKTID_AUDIT_MAP */
 
 	if (locker->inuse == FALSE) { /* Debug check for cloned numbered key */
 		DHD_ERROR(("%s:%d: Error! freeing invalid pktid<%u>\n",
@@ -1079,6 +1390,10 @@ dhd_pktid_map_free(dhd_pktid_map_handle_t *handle, uint32 nkey,
 #endif /* ! DHD_PKTIDMAP_FIFO */
 
 	locker->inuse = FALSE; /* open and free Locker */
+
+#if defined(DHD_PKTID_AUDIT_MAP)
+	DHD_PKTID_AUDIT(map, nkey, DHD_TEST_IS_FREE);
+#endif /* DHD_PKTID_AUDIT_MAP */
 
 	*physaddr = locker->physaddr; /* return contents of locker */
 	*len = (uint32)locker->len;
@@ -1852,6 +2167,11 @@ dhd_prot_rxbufpost(dhd_pub_t *dhd, uint16 count)
 			rxbuf_post->metadata_buf_addr.high_addr = 0;
 			rxbuf_post->metadata_buf_addr.low_addr  = 0;
 		}
+
+#if defined(DHD_PKTID_AUDIT_RING)
+		DHD_PKTID_AUDIT(prot->pktid_map_handle, pktid, DHD_DUPLICATE_ALLOC);
+#endif /* DHD_PKTID_AUDIT_RING */
+
 		rxbuf_post->cmn_hdr.request_id = htol32(pktid);
 
 		/* Move rxbuf_post_tmp to next item */
@@ -1962,6 +2282,10 @@ dhd_prot_rxbufpost_ctrl(dhd_pub_t *dhd, bool event_buf)
 
 		goto free_pkt_return;
 	}
+
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(prot->pktid_map_handle, pktid, DHD_DUPLICATE_ALLOC);
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	/* CMN msg header */
 	if (event_buf) {
@@ -2357,6 +2681,14 @@ static void
 dhd_prot_ioctack_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 {
 	ioctl_req_ack_msg_t * ioct_ack = (ioctl_req_ack_msg_t *)buf;
+#if defined(DHD_PKTID_AUDIT_RING)
+	uint32 pktid;
+	pktid = ltoh32(ioct_ack->cmn_hdr.request_id);
+	if (pktid != DHD_IOCTL_REQ_PKTID) {
+		DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pktid,
+			DHD_TEST_IS_ALLOC);
+	}
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	DHD_CTL(("ioctl req ack: request_id %d, status 0x%04x, flow ring %d \n",
 		ioct_ack->cmn_hdr.request_id, ioct_ack->compl_hdr.status,
@@ -2388,6 +2720,12 @@ dhd_prot_ioctcmplt_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 	memset(buf, 0, msglen);
 #endif /* PCIE_D2H_SYNC_BZERO */
 
+#if defined(DHD_PKTID_AUDIT_RING)
+	/* will be freed later */
+	DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pkt_id,
+		DHD_TEST_IS_ALLOC);
+#endif /* DHD_PKTID_AUDIT_RING */
+
 	DHD_CTL(("IOCTL_COMPLETE: pktid %x xtid %d status %x resplen %d\n",
 		pkt_id, xt_id, status, resp_len));
 
@@ -2408,12 +2746,17 @@ dhd_prot_txstatus_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 
 	txstatus = (host_txbuf_cmpl_t *)buf;
 	pktid = ltoh32(txstatus->cmn_hdr.request_id);
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pktid,
+		DHD_DUPLICATE_FREE);
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	DHD_INFO(("txstatus for pktid 0x%04x\n", pktid));
-	if (prot->active_tx_count)
+	if (prot->active_tx_count) {
 		prot->active_tx_count--;
-	else
+	} else {
 		DHD_ERROR(("Extra packets are freed\n"));
+	}
 
 	ASSERT(pktid != 0);
 
@@ -2477,7 +2820,7 @@ static void
 dhd_prot_event_process(dhd_pub_t *dhd, void* buf, uint16 len)
 {
 	wlevent_req_msg_t *evnt;
-	uint32 bufid;
+	uint32 pktid;
 	uint16 buflen;
 	int ifidx = 0;
 	void* pkt;
@@ -2488,7 +2831,13 @@ dhd_prot_event_process(dhd_pub_t *dhd, void* buf, uint16 len)
 
 	/* Event complete header */
 	evnt = (wlevent_req_msg_t *)buf;
-	bufid = ltoh32(evnt->cmn_hdr.request_id);
+	pktid = ltoh32(evnt->cmn_hdr.request_id);
+
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pktid,
+		DHD_DUPLICATE_FREE);
+#endif /* DHD_PKTID_AUDIT_RING */
+
 	buflen = ltoh16(evnt->event_data_len);
 
 	ifidx = BCMMSGBUF_API_IFIDX(&evnt->cmn_hdr);
@@ -2511,7 +2860,8 @@ dhd_prot_event_process(dhd_pub_t *dhd, void* buf, uint16 len)
 
 	/* locks required to protect pktid_map */
 	DHD_GENERAL_LOCK(dhd, flags);
-	pkt = dhd_prot_packet_get(dhd, ltoh32(bufid), BUFF_TYPE_EVENT_RX);
+	pkt = dhd_prot_packet_get(dhd, pktid, BUFF_TYPE_EVENT_RX);
+
 	DHD_GENERAL_UNLOCK(dhd, flags);
 
 	if (!pkt) {
@@ -2547,6 +2897,11 @@ dhd_prot_rxcmplt_process(dhd_pub_t *dhd, void* buf, uint16 msglen)
 	dhd_prot_return_rxbuf(dhd, 1);
 
 	pktid = ltoh32(rxcmplt_h->cmn_hdr.request_id);
+
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pktid,
+		DHD_DUPLICATE_FREE);
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	/* offset from which data starts is populated in rxstatus0 */
 	data_offset = ltoh16(rxcmplt_h->data_offset);
@@ -2719,7 +3074,7 @@ dhd_prot_txdata(dhd_pub_t *dhd, void *PKTBUF, uint8 ifidx)
 
 	/* Map the data pointer to a DMA-able address */
 	physaddr = DMA_MAP(dhd->osh, PKTDATA(dhd->osh, PKTBUF), pktlen, DMA_TX, PKTBUF, 0);
-	if ((PHYSADDRHI(physaddr) == 0) && (PHYSADDRLO(physaddr) == 0)) {
+	if (PHYSADDRISZERO(physaddr)) {
 		DHD_ERROR(("Something really bad, unless 0 is a valid phyaddr\n"));
 		ASSERT(0);
 	}
@@ -2783,6 +3138,11 @@ dhd_prot_txdata(dhd_pub_t *dhd, void *PKTBUF, uint8 ifidx)
 		txdesc->metadata_buf_addr.high_addr = 0;
 		txdesc->metadata_buf_addr.low_addr = 0;
 	}
+
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(prot->pktid_map_handle, pktid,
+		DHD_DUPLICATE_ALLOC);
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	txdesc->cmn_hdr.request_id = htol32(pktid);
 
@@ -2891,11 +3251,14 @@ int dhd_prot_ioctl(dhd_pub_t *dhd, int ifidx, wl_ioctl_t * ioc, void * buf, int 
 	}
 
 #ifdef DHD_USE_IDLECOUNT
-	bus_wake(dhd->bus);
+	if (!bus_wake(dhd->bus)) {
+		DHD_ERROR(("%s : bus_wake returns 0\n", __FUNCTION__));
+	}
 #endif /* DHD_USE_IDLECOUNT */
 
 	if (dhd->busstate == DHD_BUS_SUSPEND) {
-		DHD_ERROR(("%s : bus is suspended\n", __FUNCTION__));
+		DHD_ERROR(("%s : bus is suspended, bus->suspend[%d], bus->host_suspended[%d]\n",
+			__FUNCTION__, dhd->bus->suspended, dhd->bus->host_suspend));
 		goto done;
 	}
 
@@ -3247,6 +3610,10 @@ dhdmsgbuf_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len, void* buf, void* retbuf)
 	}
 
 	pktid = ioct_resp.cmn_hdr.request_id; /* no need for ltoh32 */
+
+#if defined(DHD_PKTID_AUDIT_RING)
+	DHD_PKTID_AUDIT(prot->pktid_map_handle, pktid, DHD_DUPLICATE_FREE);
+#endif /* DHD_PKTID_AUDIT_RING */
 
 	DHD_INFO(("ioctl resp retlen %d status %d, resp_len %d, pktid %d\n",
 		retlen, ioct_resp.compl_hdr.status, ioct_resp.resp_len, pktid));

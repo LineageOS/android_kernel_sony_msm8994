@@ -1,7 +1,7 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2015, Broadcom Corporation
+ * Copyright (C) 1999-2016, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie_linux.c 586344 2015-09-15 08:00:48Z $
+ * $Id: dhd_pcie_linux.c 627805 2016-03-28 13:12:47Z $
  */
 
 
@@ -245,11 +245,6 @@ int dhdpcie_set_suspend_resume(struct pci_dev *pdev, bool state)
 				if (ret != BCME_OK) {
 					DHD_ERROR(("fail to suspend, start net device traffic\n"));
 					netif_start_queue(netdev);
-				}
-			} else {
-				if (ret == BCME_OK) {
-					DHD_ERROR(("Normal resumed, start net device traffic\n"));
-					netif_wake_queue(netdev);
 				}
 			}
 		}
@@ -1203,6 +1198,10 @@ dhdpcie_free_resource(dhd_bus_t *bus)
 	if (bus->tcm) {
 		REG_UNMAP(dhdpcie_info->tcm);
 		bus->tcm = NULL;
+	}
+
+	if (bus->pcie_mb_intr_addr) {
+		bus->pcie_mb_intr_addr = NULL;
 	}
 }
 
