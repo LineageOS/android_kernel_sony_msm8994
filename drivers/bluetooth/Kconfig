@@ -272,4 +272,6 @@ config BT_BCM43XX
 	  Say Y here to compile support for Broadcom BCM43xx control driver
 	  into the kernel or say M to compile it as module.
 
+source "drivers/bluetooth/broadcom/Kconfig"
+
 endmenu
