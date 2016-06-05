@@ -22,7 +22,7 @@
 #include <linux/delay.h>
 #include <linux/wakelock.h>
 
-#include <mdss_hdmi_mhl.h>
+#include "../mdss_hdmi_mhl.h"
 
 #include "mhl_platform.h"
 
