@@ -23,7 +23,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux.c 633622 2016-04-24 11:50:51Z $
+ * $Id: dhd_linux.c 642286 2016-06-08 05:57:20Z $
  */
 
 #include <typedefs.h>
@@ -3048,15 +3048,22 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 		/* Process special event packets and then discard them */
 		memset(&event, 0, sizeof(event));
 		if (ntoh16(skb->protocol) == ETHER_TYPE_BRCM) {
-			dhd_wl_host_event(dhd, &ifidx,
+			int ret_event;
+
+			ret_event = dhd_wl_host_event(dhd, &ifidx,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22)
 			skb_mac_header(skb),
 #else
 			skb->mac.raw,
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 22) */
-			len > ETHER_TYPE_LEN ? len - ETHER_TYPE_LEN : 0,
+			len,
 			&event,
 			&data);
+
+			if (ret_event != BCME_OK) {
+				PKTFREE(dhdp->osh, pktbuf, FALSE);
+				continue;
+			}
 
 			wl_event_to_host_order(&event);
 			if (!tout_ctrl)

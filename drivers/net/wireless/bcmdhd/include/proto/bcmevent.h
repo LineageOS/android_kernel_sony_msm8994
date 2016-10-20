@@ -23,7 +23,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * $Id: bcmevent.h 595011 2015-10-26 05:41:56Z $
+ * $Id: bcmevent.h 642286 2016-06-08 05:57:20Z $
  *
  */
 
@@ -236,6 +236,10 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 
 /* define an API for getting the string name of an event */
 extern const char *bcmevent_get_name(uint event_type);
+
+/* validate if the event is proper and if valid copy event header to event */
+extern int is_wlc_event_frame(void *pktdata, uint pktlen, uint16 exp_usr_subtype,
+	void *out_event);
 
 
 

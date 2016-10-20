@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_android.c 537426 2015-02-26 09:17:10Z $
+ * $Id: wl_android.c 637569 2016-05-13 05:39:02Z $
  */
 
 #include <linux/module.h>
@@ -2534,6 +2534,11 @@ int wl_android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
 	android_wifi_priv_cmd priv_cmd;
 
 	net_os_wake_lock(net);
+
+	if (!capable(CAP_NET_ADMIN)) {
+		ret = -EPERM;
+		goto exit;
+	}
 
 	if (!ifr->ifr_data) {
 		ret = -EINVAL;

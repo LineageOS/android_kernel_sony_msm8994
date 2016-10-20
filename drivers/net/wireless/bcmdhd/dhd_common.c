@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_common.c 620247 2016-02-22 08:50:46Z $
+ * $Id: dhd_common.c 642286 2016-06-08 05:57:20Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -1640,48 +1640,59 @@ wl_show_host_event(dhd_pub_t *dhd_pub, wl_event_msg_t *event, void *event_data,
 }
 #endif /* SHOW_EVENTS */
 
+/* Check whether packet is a BRCM event pkt. If it is, record event data. */
 int
-wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata, uint16 pktlen,
-	wl_event_msg_t *event, void **data_ptr, void *raw_event)
+wl_host_event_get_data(void *pktdata, uint pktlen, void *evt)
 {
-	/* check whether packet is a BRCM event pkt */
+	int ret;
+
+	ret = is_wlc_event_frame(pktdata, pktlen, 0, evt);
+	if (ret != BCME_OK) {
+		DHD_ERROR(("%s: Invalid event frame, err = %d\n",
+			__FUNCTION__, ret));
+	}
+
+	return ret;
+}
+
+int
+wl_host_event(dhd_pub_t *dhd_pub, int *ifidx, void *pktdata, size_t pktlen,
+      wl_event_msg_t *event, void **data_ptr, void *raw_event)
+{
 	bcm_event_t *pvt_data = (bcm_event_t *)pktdata;
 	uint8 *event_data;
 	uint32 type, status, datalen;
 	uint16 flags;
 	uint evlen;
 	int hostidx;
+	int ret;
+	uint16 usr_subtype;
+	wl_event_msg_t evtmsg;
 
-	if (pktlen < sizeof(bcm_event_t))
-		return (BCME_ERROR);
-
-	if (ntoh16_ua((void *)&pvt_data->bcm_hdr.subtype) != BCMILCP_SUBTYPE_VENDOR_LONG ||
-		(bcmp(BRCM_OUI, &pvt_data->bcm_hdr.oui[0], DOT11_OUI_LEN)) ||
-		ntoh16_ua((void *)&pvt_data->bcm_hdr.usr_subtype) != BCMILCP_BCM_SUBTYPE_EVENT)
-	{
-		DHD_ERROR(("%s: mismatched bcm_event_t info, bailing out\n", __FUNCTION__));
-		return (BCME_ERROR);
+	ret = wl_host_event_get_data(pktdata, pktlen, &evtmsg);
+	if (ret != BCME_OK) {
+		return ret;
 	}
 
-	*data_ptr = &pvt_data[1];
+	usr_subtype = ntoh16_ua((void *)&pvt_data->bcm_hdr.usr_subtype);
+	switch (usr_subtype) {
+		case BCMILCP_BCM_SUBTYPE_EVENT:
+			memcpy(event, &evtmsg, sizeof(wl_event_msg_t));
+			*data_ptr = &pvt_data[1];
+			break;
+		default:
+			return BCME_NOTFOUND;
+	}
+
+	/* start wl_event_msg process */
 	event_data = *data_ptr;
-
-
-	/* memcpy since BRCM event pkt may be unaligned. */
-	memcpy(event, &pvt_data->event, sizeof(wl_event_msg_t));
 
 	type = ntoh32_ua((void *)&event->event_type);
 	flags = ntoh16_ua((void *)&event->flags);
 	status = ntoh32_ua((void *)&event->status);
 	datalen = ntoh32_ua((void *)&event->datalen);
 
-	if (datalen > pktlen)
-		return (BCME_ERROR);
-
 	evlen = datalen + sizeof(bcm_event_t);
-
-	if (evlen > pktlen)
-		return (BCME_ERROR);
 
 	/* find equivalent host index for event ifidx */
 	hostidx = dhd_ifidx2hostidx(dhd_pub->info, event->ifidx);
