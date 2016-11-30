@@ -736,10 +736,33 @@ wl_cfgvendor_hotlist_cfg(struct wiphy *wiphy,
 	nla_for_each_attr(iter, data, len, tmp2) {
 		type = nla_type(iter);
 		switch (type) {
+		case GSCAN_ATTRIBUTE_HOTLIST_BSSID_COUNT:
+			if (nla_len(iter) != sizeof(uint32)) {
+				WL_DBG(("type:%d length:%d not matching.\n",
+					type, nla_len(inner)));
+				err = -EINVAL;
+				goto exit;
+			}
+			hotlist_params->nbssid = (uint16)nla_get_u32(iter);
+			if ((hotlist_params->nbssid == 0) ||
+			    (hotlist_params->nbssid > PFN_SWC_MAX_NUM_APS)) {
+				WL_ERR(("nbssid:%d exceed limit.\n",
+					hotlist_params->nbssid));
+				err = -EINVAL;
+				goto exit;
+			}
+			break;
 		case GSCAN_ATTRIBUTE_HOTLIST_BSSIDS:
+			if (hotlist_params->nbssid == 0) {
+				WL_ERR(("nbssid not retrieved.\n"));
+				err = -EINVAL;
+				goto exit;
+			}
 			pbssid = hotlist_params->bssid;
 			nla_for_each_nested(outer, iter, tmp) {
 				nla_for_each_nested(inner, outer, tmp1) {
+					if (j >= hotlist_params->nbssid)
+						break;
 					type = nla_type(inner);
 
 					switch (type) {
@@ -779,12 +802,14 @@ wl_cfgvendor_hotlist_cfg(struct wiphy *wiphy,
 						goto exit;
 					}
 				}
-				if (++j >= PFN_SWC_MAX_NUM_APS) {
-					WL_ERR(("cap hotlist max:%d\n", j));
-					break;
-				}
+				j++;
 			}
-			hotlist_params->nbssid = j;
+			if (j != hotlist_params->nbssid) {
+				WL_ERR(("bssid_cnt:%d != nbssid:%d.\n", j,
+					hotlist_params->nbssid));
+				err = -EINVAL;
+				goto exit;
+			}
 			break;
 		case GSCAN_ATTRIBUTE_HOTLIST_FLUSH:
 			if (nla_len(iter) != sizeof(uint8)) {
