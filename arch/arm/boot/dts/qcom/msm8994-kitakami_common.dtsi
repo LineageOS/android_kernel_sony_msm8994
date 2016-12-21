@@ -287,16 +287,6 @@
 		gpios = <&pmi8994_gpios 1 1>;
 	};
 
-	sony,ric_info {
-		compatible = "sony_ric";
-		sony,num-partition = <7>;
-		sony,partition-names = "system", "userdata", "cache", "oem",
-				       "apps_log", "diag", "LTALabel";
-		sony,mount_paths = "/system", "/data", "/cache", "/oem",
-				   "/rca", "/idd", "/lta-label";
-		sony,mount-flags = <0x1 0x2 0x6 0x1 0xE 0xE 0xE>;
-	};
-
 	bcmdhd_wlan {
 		compatible = "android,bcmdhd_wlan";
 		gpios = <&msm_gpio 113 0x00>, /* WL_REG_ON */
