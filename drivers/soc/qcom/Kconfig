@@ -580,15 +580,6 @@ config MSM_CACHE_DUMP_ON_PANIC
 	  want to dump the L1 and L2 caches on panic before any flush occurs.
 	  If unsure, say N
 
-config SONY_SSM
-	bool "Support Super Stamina Mode"
-	default n
-	help
-	  This enables support for power mode notifications, required by Super
-	  Stamina Mode. The driver will let a user space application register
-	  for notifications when the device is ready to switch into a new
-	  power mode.
-
 config MSM_CPUSS_DUMP
 	bool "CPU Subsystem Dumping support"
 	help
