@@ -41,6 +41,10 @@
 #include <asm/mach-types.h>
 #endif
 #include <linux/pinctrl/consumer.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
 
 #define SYN_CLEARPAD_VENDOR		0x1
 #define SYN_MAX_N_FINGERS		10
@@ -603,7 +607,11 @@ struct clearpad_t {
 	int active;
 	int irq;
 	int irq_mask;
-
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
+	struct work_struct notify_resume;
+	struct work_struct notify_suspend;
+#endif
 	int screen_status;
 
 	char fwname[SYN_STRING_LENGTH + 1];
@@ -642,8 +650,9 @@ struct clearpad_t {
 
 static void clearpad_funcarea_initialize(struct clearpad_t *this);
 static int clearpad_reset_power(struct clearpad_t *this, const char *cause);
-static void clearpad_resume(struct device *dev);
-static void clearpad_suspend(struct device *dev);
+
+static int clearpad_resume(struct device *dev);
+static int clearpad_suspend(struct device *dev);
 
 static char *clearpad_s(u8 *array, size_t size)
 {
@@ -4259,11 +4268,13 @@ static void clearpad_input_ev_init(struct clearpad_t *this)
 	}
 }
 
-static void clearpad_suspend(struct device *dev)
+static int clearpad_suspend(struct device *dev)
 {
 	struct clearpad_t *this = dev_get_drvdata(dev);
+	int rc = 0;
 	bool go_suspend;
 
+	LOCK(this);
 	go_suspend = (this->task != SYN_TASK_NO_SUSPEND);
 	if (go_suspend)
 		this->active |= SYN_STANDBY;
@@ -4272,13 +4283,21 @@ static void clearpad_suspend(struct device *dev)
 
 	LOG_STAT(this, "active: %x (task: %s)\n",
 		 this->active, clearpad_task_name[this->task]);
+	UNLOCK(this);
+
+	rc = clearpad_set_power(this);
+	if (rc && this->reset_count >= SYN_RETRY_NUM_OF_RESET)
+		rc = 0; /* stop retry of recovery */
+	return rc;
 }
 
-static void clearpad_resume(struct device *dev)
+static int clearpad_resume(struct device *dev)
 {
 	struct clearpad_t *this = dev_get_drvdata(dev);
+	int rc = 0;
 	bool go_resume;
 
+	LOCK(this);
 	go_resume = !!(this->active & (SYN_STANDBY | SYN_STANDBY_AFTER_TASK));
 	if (go_resume)
 		this->active &= ~(SYN_STANDBY | SYN_STANDBY_AFTER_TASK);
@@ -4287,6 +4306,12 @@ static void clearpad_resume(struct device *dev)
 		 this->active, clearpad_task_name[this->task]);
 
 	clearpad_funcarea_invalidate_all(this);
+	UNLOCK(this);
+
+	rc = clearpad_set_power(this);
+	if (rc && this->reset_count >= SYN_RETRY_NUM_OF_RESET)
+		rc = 0; /* stop retry of recovery */
+	return rc;
 }
 
 static int clearpad_pm_suspend(struct device *dev)
@@ -4304,16 +4329,12 @@ static int clearpad_pm_suspend(struct device *dev)
 	this->dev_busy = true;
 	spin_unlock_irqrestore(&this->slock, flags);
 
-	if (this->active & SYN_ACTIVE_POWER) {
-		clearpad_suspend(&this->pdev->dev);
-		rc = clearpad_set_power(this);
-		if (rc) {
-			if (this->reset_count >= SYN_RETRY_NUM_OF_RESET)
-				rc = 0; /* stop retry of recovery */
-			else
-				return rc;
-		}
-	}
+#ifdef CONFIG_FB
+	if (this->active & SYN_ACTIVE_POWER)
+#endif
+		rc = clearpad_suspend(&this->pdev->dev);
+	if (rc)
+		return rc;
 
 	if (device_may_wakeup(dev)) {
 		enable_irq_wake(this->irq);
@@ -4357,6 +4378,51 @@ static int clearpad_pm_suspend_noirq(struct device *dev)
 	}
 	return 0;
 }
+
+#ifdef CONFIG_FB
+static void notify_resume(struct work_struct *work)
+{
+	struct clearpad_t *this = container_of(work,
+			struct clearpad_t, notify_resume);
+
+	if (!(this->active & SYN_ACTIVE_POWER))
+		clearpad_resume(&this->pdev->dev);
+}
+
+static void notify_suspend(struct work_struct *work)
+{
+	struct clearpad_t *this = container_of(work,
+			struct clearpad_t, notify_suspend);
+
+	if (this->active & SYN_ACTIVE_POWER)
+		clearpad_suspend(&this->pdev->dev);
+}
+
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	struct clearpad_t *this =
+		container_of(self, struct clearpad_t, fb_notif);
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK && this &&
+			this->pdev) {
+		blank = evdata->data;
+		if (*blank == FB_BLANK_UNBLANK) {
+			cancel_work_sync(&this->notify_suspend);
+			cancel_work_sync(&this->notify_resume);
+			schedule_work(&this->notify_resume);
+		} else if (*blank == FB_BLANK_POWERDOWN) {
+			cancel_work_sync(&this->notify_resume);
+			cancel_work_sync(&this->notify_suspend);
+			schedule_work(&this->notify_suspend);
+		}
+	}
+
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 static int clearpad_debug_hwtest_log(struct clearpad_t *this,
@@ -5525,6 +5591,17 @@ static int clearpad_probe(struct platform_device *pdev)
 
 	this->state = SYN_STATE_RUNNING;
 
+#ifdef CONFIG_FB
+	this->fb_notif.notifier_call = fb_notifier_callback;
+	rc = fb_register_client(&this->fb_notif);
+	if (rc) {
+		dev_err(&this->pdev->dev, "Unable to register fb_notifier\n");
+	} else {
+		INIT_WORK(&this->notify_resume, notify_resume);
+		INIT_WORK(&this->notify_suspend, notify_suspend);
+	}
+#endif
+
 	/* sysfs */
 	rc = create_sysfs_entries(this);
 	if (rc)
@@ -5589,6 +5666,9 @@ err_sysfs_remove_group:
 #endif
 	remove_sysfs_entries(this);
 err_input_device:
+#ifdef CONFIG_FB
+	fb_unregister_client(&this->fb_notif);
+#endif
 	input_unregister_device(this->input);
 err_gpio_teardown:
 	clearpad_gpio_configure(this, 0);
@@ -5634,6 +5714,11 @@ static int clearpad_remove(struct platform_device *pdev)
 	debugfs_remove_recursive(this->debugfs);
 #endif
 	remove_sysfs_entries(this);
+#ifdef CONFIG_FB
+	fb_unregister_client(&this->fb_notif);
+	cancel_work_sync(&this->notify_resume);
+	cancel_work_sync(&this->notify_suspend);
+#endif
 	input_unregister_device(this->input);
 	clearpad_gpio_configure(this, 0);
 	devm_pinctrl_put(this->pctrl.pinctrl);
