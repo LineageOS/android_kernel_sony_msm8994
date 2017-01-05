@@ -105,12 +105,12 @@
 					};
 					event_01 {
 						type = <1>; /* KEY */
-						code = <531>; /* TOUCHPAD_ON */
+						code = <143>; /* KEY_WAKEUP */
 						down = <1>;
 					};
 					event_02 {
 						type = <1>; /* KEY */
-						code = <531>; /* TOUCHPAD_ON */
+						code = <143>; /* KEY_WAKEUP */
 						down = <0>;
 					};
 					event_03 {
