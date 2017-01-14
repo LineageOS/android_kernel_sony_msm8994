@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da3975d1_e0d74cbe",
+        "filename": "security/selinux/hooks.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 447,
+      "author": {
+        "id": 4550
+      },
+      "writtenOn": "2017-01-14T14:09:24Z",
+      "side": 1,
+      "message": "Duplicate, handled right above",
+      "revId": "7570f7d189e9ca2eebf734233990d36b01482aa8",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
