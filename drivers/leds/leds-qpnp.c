@@ -2704,6 +2704,7 @@ static void led_blink(struct qpnp_led_data *led,
 {
 	int rc;
 
+	cancel_work_sync(&led->work);
 	flush_work(&led->work);
 	mutex_lock(&led->lock);
 	if (pwm_cfg->use_blink) {
