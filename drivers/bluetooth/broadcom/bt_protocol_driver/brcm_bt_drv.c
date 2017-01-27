@@ -29,6 +29,7 @@
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/ioctl.h>
 #include <linux/kdev_t.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
@@ -507,6 +508,14 @@ static void bt_send_data_ldisc(struct work_struct *w)
     }
 }
 
+/*
+   Fake ioctl cals from broadcom vendor lib.
+   We need return OK to everything, because UIM already took control over power managment.
+*/
+static long fake_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
+{
+    return 0;
+}
 
 /*  File operations which can be performed on this driver  */
 static struct file_operations brcm_bt_drv_fops =
@@ -516,7 +525,8 @@ static struct file_operations brcm_bt_drv_fops =
   .release = brcm_bt_drv_close,
   .read = brcm_bt_drv_read,
   .write = brcm_bt_write,
-  .poll = brcm_bt_drv_poll
+  .poll = brcm_bt_drv_poll,
+  .unlocked_ioctl = fake_ioctl
 };
 
 
