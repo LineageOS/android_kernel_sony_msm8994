@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "9a437d4f_6fb572cc",
+        "filename": "net/socket.c",
+        "patchSetId": 1
+      },
+      "lineNbr": 2447,
+      "author": {
+        "id": 15143
+      },
+      "writtenOn": "2017-01-28T20:19:40Z",
+      "side": 1,
+      "message": "this breaks build, probably a mismerge",
+      "revId": "ff34fc5a0c71e66f65b91b46ab3555fe4dcb1ab6",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
