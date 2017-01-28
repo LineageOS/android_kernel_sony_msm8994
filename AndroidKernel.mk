@@ -99,8 +99,6 @@ mpath=`dirname $$mdpath`; rm -rf $$mpath;\
 fi
 endef
 
-KERNEL_BUILD_STAMP := $(KERNEL_OUT)/.build_stamp
-
 FORCE:
 
 $(KERNEL_OUT):

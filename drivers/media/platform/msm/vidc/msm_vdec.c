@@ -1180,9 +1180,7 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	int max_input_size = 0;
 
 	if (!inst || !f) {
-		dprintk(VIDC_ERR,
-			"%s: invalid parameters, format %pK, inst %pK\n",
-			__func__, f, inst);
+		dprintk(VIDC_ERR, "%s invalid parameters\n", __func__);
 		return -EINVAL;
 	}
 
