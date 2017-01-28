@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -334,7 +334,7 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 
 	iommu_dev = get_iommu_device(iommu_unit, dev);
 	if (!iommu_dev) {
-		KGSL_CORE_ERR("Invalid IOMMU device %p\n", dev);
+		KGSL_CORE_ERR("Invalid IOMMU device %pK\n", dev);
 		ret = -ENOSYS;
 		goto done;
 	}
@@ -724,8 +724,8 @@ static void kgsl_detach_pagetable_iommu_domain(struct kgsl_mmu *mmu)
 				iommu_detach_device(iommu_pt->domain,
 						iommu_unit->dev[j].dev);
 				iommu_unit->dev[j].attached = false;
-				KGSL_MEM_INFO(mmu->device, "iommu %p detached "
-					"from user dev of MMU: %p\n",
+				KGSL_MEM_INFO(mmu->device, "iommu %pK detached "
+					"from user dev of MMU: %pK\n",
 					iommu_pt->domain, mmu);
 			}
 		}
@@ -789,7 +789,7 @@ static int kgsl_attach_pagetable_iommu_domain(struct kgsl_mmu *mmu)
 				}
 				iommu_unit->dev[j].attached = true;
 				KGSL_MEM_INFO(mmu->device,
-				"iommu pt %p attached to dev %p, ctx_id %d\n",
+				"iommu pt %pK attached to dev %pK, ctx_id %d\n",
 				iommu_pt->domain, iommu_unit->dev[j].dev,
 				iommu_unit->dev[j].ctx_id);
 				/* Init IOMMU unit clks here */
@@ -862,7 +862,7 @@ static int _get_iommu_ctxs(struct kgsl_mmu *mmu,
 		iommu_unit->dev[iommu_unit->dev_count].kgsldev = mmu->device;
 
 		KGSL_DRV_INFO(mmu->device,
-				"Obtained dev handle %p for iommu context %s\n",
+				"Obtained dev handle %pK for iommu context %s\n",
 				iommu_unit->dev[iommu_unit->dev_count].dev,
 				data->iommu_ctxs[i].iommu_ctx_name);
 
@@ -1681,7 +1681,7 @@ kgsl_iommu_unmap(struct kgsl_pagetable *pt,
 	} else
 		ret = iommu_unmap_range(iommu_pt->domain, gpuaddr, range);
 	if (ret) {
-		KGSL_CORE_ERR("iommu_unmap_range(%p, %x, %d) failed "
+		KGSL_CORE_ERR("iommu_unmap_range(%pK, %x, %d) failed "
 			"with err: %d\n", iommu_pt->domain, gpuaddr,
 			range, ret);
 		return ret;
@@ -1707,23 +1707,22 @@ kgsl_iommu_unmap(struct kgsl_pagetable *pt,
  */
 struct scatterlist *_create_sg_no_large_pages(struct kgsl_memdesc *memdesc)
 {
-	struct page *page;
-	struct scatterlist *s, *s_temp, *sg_temp;
-	int sglen_alloc = 0;
+	struct scatterlist *s_temp, *sg_temp;
+	int sglen, sglen_alloc = 0;
 	uint64_t offset, pg_size;
 	int i;
 
-	for_each_sg(memdesc->sg, s, memdesc->sglen, i) {
-		if (SZ_1M <= s->length) {
-			sglen_alloc += s->length >> 16;
-			sglen_alloc += ((s->length & 0xF000) >> 12);
-		} else {
+	for (i = 0; i < memdesc->page_count;) {
+		struct page *p = memdesc->pages[i];
+		unsigned int length = (1 << compound_order(p)) << PAGE_SHIFT;
+
+		if (SZ_1M <= length)
+			sglen_alloc += length >> 16;
+		else
 			sglen_alloc++;
-		}
+
+		i += length >> PAGE_SHIFT;
 	}
-	/* No large pages were detected */
-	if (sglen_alloc == memdesc->sglen)
-		return NULL;
 
 	sg_temp = kgsl_malloc(sglen_alloc * sizeof(struct scatterlist));
 	if (NULL == sg_temp)
@@ -1732,21 +1731,29 @@ struct scatterlist *_create_sg_no_large_pages(struct kgsl_memdesc *memdesc)
 	sg_init_table(sg_temp, sglen_alloc);
 	s_temp = sg_temp;
 
-	for_each_sg(memdesc->sg, s, memdesc->sglen, i) {
-		page = sg_page(s);
-		if (SZ_1M <= s->length) {
-			for (offset = 0; offset < s->length; s_temp++) {
-				pg_size = ((s->length - offset) >= SZ_64K) ?
+	for (i = 0; i < memdesc->page_count;) {
+		struct page *p = memdesc->pages[i];
+		unsigned int length = (1 << compound_order(p)) << PAGE_SHIFT;
+
+		if (SZ_1M <= length) {
+			for (offset = 0; offset < length; s_temp++) {
+				pg_size = (length - offset) >= SZ_64K ?
 						SZ_64K : SZ_4K;
-				sg_set_page(s_temp, page, pg_size, offset);
+				sg_set_page(s_temp, p, pg_size, offset);
 				offset += pg_size;
 			}
 		} else {
-			sg_set_page(s_temp, page, s->length, 0);
+			sg_set_page(s_temp, p, length, 0);
 			s_temp++;
 		}
+		i += length >> PAGE_SHIFT;
+
 	}
+	sglen = (int)(s_temp - sg_temp);
+	sg_mark_end(&sg_temp[sglen - 1]);
+
 	return sg_temp;
+
 }
 
 /**
@@ -1794,7 +1801,7 @@ int _iommu_add_guard_page(struct kgsl_pagetable *pt,
 				protflags & ~IOMMU_WRITE);
 		if (ret) {
 			KGSL_CORE_ERR(
-			"iommu_map(%p, addr %x, flags %x) err: %d\n",
+			"iommu_map(%pK, addr %x, flags %x) err: %d\n",
 			iommu_pt->domain, gpuaddr, protflags & ~IOMMU_WRITE,
 			ret);
 			return ret;
@@ -1818,6 +1825,7 @@ kgsl_iommu_map(struct kgsl_pagetable *pt,
 	struct scatterlist *sg_temp = NULL;
 
 	BUG_ON(NULL == iommu_pt);
+
 
 	iommu_virt_addr = memdesc->gpuaddr;
 
@@ -1843,7 +1851,8 @@ kgsl_iommu_map(struct kgsl_pagetable *pt,
 		}
 		mutex_unlock(&device->mutex);
 	} else {
-		sg_temp = _create_sg_no_large_pages(memdesc);
+		if (memdesc->pages != NULL)
+			sg_temp = _create_sg_no_large_pages(memdesc);
 
 		if (IS_ERR(sg_temp))
 			return PTR_ERR(sg_temp);
@@ -1854,7 +1863,7 @@ kgsl_iommu_map(struct kgsl_pagetable *pt,
 	}
 
 	if (ret)
-		KGSL_CORE_ERR("iommu_map_range(%p, %x, %p, %zd, %x) err: %d\n",
+		KGSL_CORE_ERR("iommu_map_range(%pK, %x, %pK, %zd, %x) err: %d\n",
 			iommu_pt->domain, iommu_virt_addr,
 			sg_temp != NULL ? sg_temp : memdesc->sg, size,
 			protflags, ret);

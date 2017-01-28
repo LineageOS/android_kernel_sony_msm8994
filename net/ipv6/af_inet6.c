@@ -447,6 +447,7 @@ void inet6_destroy_sock(struct sock *sk)
 	fl6_free_socklist(sk);
 
 	/* Free tx options */
+
 	opt = xchg((__force struct ipv6_txoptions **)&np->opt, NULL);
 	if (opt) {
 		atomic_sub(opt->tot_len, &sk->sk_omem_alloc);

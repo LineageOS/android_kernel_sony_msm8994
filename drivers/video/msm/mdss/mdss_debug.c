@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -78,7 +78,7 @@ static ssize_t panel_debug_base_offset_write(struct file *file,
 
 	buf[count] = 0;	/* end of string */
 
-	if (sscanf(buf, "%x %x", &off, &cnt) != 2)
+	if (sscanf(buf, "%x %u", &off, &cnt) != 2)
 		return -EFAULT;
 
 	if (off > dbg->max_offset)
@@ -168,7 +168,7 @@ static ssize_t panel_debug_base_reg_write(struct file *file,
 	for (i = 0; i < len; i++) {
 		p = buf + i * 3;
 		p[2] = 0;
-		pr_debug("p[%d] = %p:%s\n", i, p, p);
+		pr_debug("p[%d] = %pK:%s\n", i, p, p);
 		cnt = sscanf(p, "%x", &tmp);
 		reg[i] = tmp;
 		pr_debug("reg[%d] = %x\n", i, (int)reg[i]);
@@ -231,10 +231,10 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 	if (mdata->debug_inf.debug_enable_clock)
 		mdata->debug_inf.debug_enable_clock(0);
 
-	if (len < 0 || len >= sizeof(panel_reg_buf))
+	if (len < 0 || len >= sizeof(to_user_buf))
 		return 0;
 
-	if ((count < sizeof(panel_reg_buf))
+	if ((count < sizeof(to_user_buf))
 			|| copy_to_user(user_buf, to_user_buf, len))
 		return -EFAULT;
 
@@ -679,11 +679,11 @@ static ssize_t mdss_debug_factor_write(struct file *file,
 
 	if (strnchr(buf, count, '/')) {
 		/* Parsing buf as fraction */
-		if (sscanf(buf, "%d/%d", &numer, &denom) != 2)
+		if (sscanf(buf, "%u/%u", &numer, &denom) != 2)
 			return -EFAULT;
 	} else {
 		/* Parsing buf as percentage */
-		if (sscanf(buf, "%d", &numer) != 1)
+		if (kstrtouint(buf, 0, &numer))
 			return -EFAULT;
 		denom = 100;
 	}
@@ -776,8 +776,6 @@ static ssize_t mdss_debug_perf_mode_read(struct file *file,
 
 	if (*ppos)
 		return 0;	/* the end */
-
-	buf[count] = 0;
 
 	len = snprintf(buf, sizeof(buf), "min_mdp_clk %lu min_bus_vote %llu\n",
 	perf_tune->min_mdp_clk, perf_tune->min_bus_vote);
@@ -1156,7 +1154,7 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id,
 		return NULL;
 	}
 
-	pr_debug("MISR Module(%d) CTRL(0x%x) SIG(0x%x) intf_base(0x%p)\n",
+	pr_debug("MISR Module(%d) CTRL(0x%x) SIG(0x%x) intf_base(0x%pK)\n",
 			block_id, map->ctrl_reg, map->value_reg, intf_base);
 	return map;
 }
@@ -1199,11 +1197,13 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 	bool use_mdp_up_misr = false;
 
 	if (!mdata || !req || !ctl) {
-		pr_err("Invalid input params: mdata = %p req = %p ctl = %p",
+		pr_err("Invalid input params: mdata = %pK req = %pK ctl = %pK",
 			mdata, req, ctl);
 		return -EINVAL;
 	}
+
 	map = mdss_misr_get_map(req->block_id, ctl, mdata);
+
 	if (!map) {
 		pr_err("Invalid MISR Block=%d\n", req->block_id);
 		return -EINVAL;

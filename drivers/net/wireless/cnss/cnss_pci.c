@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,6 +38,7 @@
 #include <linux/crypto.h>
 #include <linux/scatterlist.h>
 #include <linux/log2.h>
+#include <linux/etherdevice.h>
 #ifdef CONFIG_PCI_MSM
 #include <linux/msm_pcie.h>
 #else
@@ -48,6 +49,11 @@
 #include <soc/qcom/ramdump.h>
 #include <soc/qcom/memory_dump.h>
 #include <net/cnss.h>
+#include <net/cnss_common.h>
+
+#ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
+#include <net/cnss_prealloc.h>
+#endif
 
 #define subsys_to_drv(d) container_of(d, struct cnss_data, subsys_desc)
 
@@ -208,6 +214,16 @@ struct index_file {
 	u8 file_name[13];
 };
 
+/**
+ * struct wlan_mac_addr - Structure to hold WLAN MAC Address
+ * @mac_addr: MAC address
+ */
+#define MAX_NO_OF_MAC_ADDR 4
+struct cnss_wlan_mac_addr {
+	u8 mac_addr[MAX_NO_OF_MAC_ADDR][ETH_ALEN];
+	uint32_t no_of_mac_addr_set;
+};
+
 /* device_info is expected to be fully populated after cnss_config is invoked.
  * The function pointer callbacks are expected to be non null as well.
  */
@@ -215,14 +231,14 @@ static struct cnss_data {
 	struct platform_device *pldev;
 	struct subsys_device *subsys;
 	struct subsys_desc    subsysdesc;
+	struct cnss_wlan_mac_addr wlan_mac_addr;
+	bool is_wlan_mac_set;
 	bool ramdump_dynamic;
 	struct ramdump_device *ramdump_dev;
 	unsigned long ramdump_size;
 	void *ramdump_addr;
 	phys_addr_t ramdump_phys;
 	struct msm_dump_data dump_data;
-	u16 unsafe_ch_count;
-	u16 unsafe_ch_list[CNSS_MAX_CH_NUM];
 	struct cnss_wlan_driver *driver;
 	struct pci_dev *pdev;
 	const struct pci_device_id *id;
@@ -234,7 +250,6 @@ static struct cnss_data {
 	bool notify_modem_status;
 	struct pci_saved_state *saved_state;
 	u16 revision_id;
-	u16 dfs_nol_info_len;
 	bool recovery_in_progress;
 	bool fw_available;
 	struct codeswap_codeseg_info *cnss_seg_info;
@@ -253,7 +268,6 @@ static struct cnss_data {
 	struct wakeup_source ws;
 	uint32_t recovery_count;
 	enum cnss_driver_status driver_status;
-	void *dfs_nol_info;
 #ifdef CONFIG_CNSS_SECURE_FW
 	void *fw_mem;
 #endif
@@ -492,6 +506,7 @@ static int cnss_pinctrl_init(struct cnss_wlan_gpio_info *gpio_info,
 	struct platform_device *pdev)
 {
 	int ret;
+
 	gpio_info->pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR_OR_NULL(gpio_info->pinctrl)) {
 		pr_err("%s: Failed to get pinctrl!\n", __func__);
@@ -1550,12 +1565,12 @@ static ssize_t fw_image_setup_store(struct device *dev,
 static DEVICE_ATTR(fw_image_setup, S_IRUSR | S_IWUSR,
 	fw_image_setup_show, fw_image_setup_store);
 
-void recovery_work_handler(struct work_struct *recovery)
+void cnss_pci_recovery_work_handler(struct work_struct *recovery)
 {
-	cnss_device_self_recovery();
+	cnss_pci_device_self_recovery();
 }
 
-DECLARE_WORK(recovery_work, recovery_work_handler);
+DECLARE_WORK(recovery_work, cnss_pci_recovery_work_handler);
 
 void cnss_schedule_recovery_work(void)
 {
@@ -1718,6 +1733,131 @@ release_fw:
 end:
 	return;
 }
+
+/**
+ * cnss_get_wlan_mac_address() - API to return MAC addresses buffer
+ * @dev: struct device pointer
+ * @num: buffer for number of mac addresses supported
+ *
+ * API returns the pointer to the buffer filled with mac addresses and
+ * updates num with the number of mac addresses the buffer contains.
+ *
+ * Return: pointer to mac address buffer.
+ */
+u8 *cnss_pci_get_wlan_mac_address(uint32_t *num)
+{
+	struct cnss_wlan_mac_addr *addr = NULL;
+
+	if (!penv) {
+		pr_err("%s: Invalid Platform Driver Context\n", __func__);
+		goto end;
+	}
+
+	if (!penv->is_wlan_mac_set) {
+		pr_info("%s: Platform Driver doesn't have any mac address\n",
+			__func__);
+		goto end;
+	}
+
+	addr = &penv->wlan_mac_addr;
+	*num = addr->no_of_mac_addr_set;
+	return &addr->mac_addr[0][0];
+
+end:
+	*num = 0;
+	return NULL;
+}
+EXPORT_SYMBOL(cnss_pci_get_wlan_mac_address);
+
+/**
+ * cnss_get_wlan_mac_address() - API to return MAC addresses buffer
+ * @dev: struct device pointer
+ * @num: buffer for number of mac addresses supported
+ *
+ * API returns the pointer to the buffer filled with mac addresses and
+ * updates num with the number of mac addresses the buffer contains.
+ *
+ * Return: pointer to mac address buffer.
+ */
+u8 *cnss_get_wlan_mac_address(struct device *dev, uint32_t *num)
+{
+	struct cnss_wlan_mac_addr *addr = NULL;
+
+	if (!penv) {
+		pr_err("%s: Invalid Platform Driver Context\n", __func__);
+		goto end;
+	}
+
+	if (!penv->is_wlan_mac_set) {
+		pr_info("%s: Platform Driver doesn't have any mac address\n",
+			__func__);
+		goto end;
+	}
+
+	addr = &penv->wlan_mac_addr;
+	*num = addr->no_of_mac_addr_set;
+	return &addr->mac_addr[0][0];
+end:
+	*num = 0;
+	return NULL;
+}
+EXPORT_SYMBOL(cnss_get_wlan_mac_address);
+
+/**
+* cnss_pcie_set_wlan_mac_address() - API to get two wlan mac address
+* @in: Input buffer with wlan mac addresses
+* @len: Size of the buffer passed
+*
+* API to store wlan mac address passed by the caller. The stored mac
+* addresses are used by the wlan functional driver to program wlan HW.
+*
+* Return: kernel error code.
+*/
+int cnss_pcie_set_wlan_mac_address(const u8 *in, uint32_t len)
+{
+	uint32_t no_of_mac_addr;
+	struct cnss_wlan_mac_addr *addr = NULL;
+	int iter = 0;
+	u8 *temp = NULL;
+
+	if (len == 0 || (len % ETH_ALEN) != 0) {
+		pr_err("%s: Invalid Length:%d\n", __func__, len);
+		return -EINVAL;
+	}
+
+	no_of_mac_addr = len / ETH_ALEN;
+
+	if (no_of_mac_addr > MAX_NO_OF_MAC_ADDR) {
+		pr_err("%s: Num of supported MAC  addresses are:%d given:%d\n",
+		       __func__, MAX_NO_OF_MAC_ADDR, no_of_mac_addr);
+		return -EINVAL;
+	}
+
+	if (!penv) {
+		pr_err("%s: Invalid CNSS Platform Context\n", __func__);
+		return -ENOENT;
+	}
+
+	if (penv->is_wlan_mac_set) {
+		pr_info("%s: Already MAC address are configured\n", __func__);
+		return 0;
+	}
+
+	penv->is_wlan_mac_set = true;
+	addr = &penv->wlan_mac_addr;
+	addr->no_of_mac_addr_set = no_of_mac_addr;
+	temp = &addr->mac_addr[0][0];
+
+	for (; iter < no_of_mac_addr; ++iter, temp += ETH_ALEN, in +=
+	     ETH_ALEN) {
+		ether_addr_copy(temp, in);
+		pr_debug("%s MAC_ADDR:%02x:%02x:%02x:%02x:%02x:%02x\n",
+			 __func__, temp[0], temp[1], temp[2], temp[3], temp[4],
+			 temp[5]);
+	}
+	return 0;
+}
+EXPORT_SYMBOL(cnss_pcie_set_wlan_mac_address);
 
 int cnss_wlan_register_driver(struct cnss_wlan_driver *driver)
 {
@@ -1960,120 +2100,6 @@ cut_power:
 }
 EXPORT_SYMBOL(cnss_wlan_unregister_driver);
 
-int cnss_set_wlan_unsafe_channel(u16 *unsafe_ch_list, u16 ch_count)
-{
-	if (!penv)
-		return -ENODEV;
-
-	if ((!unsafe_ch_list) || (ch_count > CNSS_MAX_CH_NUM))
-		return -EINVAL;
-
-	penv->unsafe_ch_count = ch_count;
-
-	if (ch_count != 0)
-		memcpy((char *)penv->unsafe_ch_list, (char *)unsafe_ch_list,
-			ch_count * sizeof(u16));
-
-	return 0;
-}
-EXPORT_SYMBOL(cnss_set_wlan_unsafe_channel);
-
-int cnss_get_wlan_unsafe_channel(u16 *unsafe_ch_list,
-					u16 *ch_count, u16 buf_len)
-{
-	if (!penv)
-		return -ENODEV;
-
-	if (!unsafe_ch_list || !ch_count)
-		return -EINVAL;
-
-	if (buf_len < (penv->unsafe_ch_count * sizeof(u16)))
-		return -ENOMEM;
-
-	*ch_count = penv->unsafe_ch_count;
-	memcpy((char *)unsafe_ch_list, (char *)penv->unsafe_ch_list,
-			penv->unsafe_ch_count * sizeof(u16));
-
-	return 0;
-}
-EXPORT_SYMBOL(cnss_get_wlan_unsafe_channel);
-
-int cnss_wlan_set_dfs_nol(void *info, u16 info_len)
-{
-	void *temp;
-
-	if (!penv)
-		return -ENODEV;
-
-	if (!info || !info_len)
-		return -EINVAL;
-
-	temp = kmalloc(info_len, GFP_KERNEL);
-	if (!temp)
-		return -ENOMEM;
-
-	memcpy(temp, info, info_len);
-
-	kfree(penv->dfs_nol_info);
-
-	penv->dfs_nol_info = temp;
-	penv->dfs_nol_info_len = info_len;
-
-	return 0;
-}
-EXPORT_SYMBOL(cnss_wlan_set_dfs_nol);
-
-int cnss_wlan_get_dfs_nol(void *info, u16 info_len)
-{
-	int len;
-
-	if (!penv)
-		return -ENODEV;
-
-	if (!info || !info_len)
-		return -EINVAL;
-
-	if (penv->dfs_nol_info == NULL || penv->dfs_nol_info_len == 0)
-		return -ENOENT;
-
-	len = min(info_len, penv->dfs_nol_info_len);
-
-	memcpy(info, penv->dfs_nol_info, len);
-
-	return len;
-}
-EXPORT_SYMBOL(cnss_wlan_get_dfs_nol);
-
-void cnss_pm_wake_lock_init(struct wakeup_source *ws, const char *name)
-{
-	wakeup_source_init(ws, name);
-}
-EXPORT_SYMBOL(cnss_pm_wake_lock_init);
-
-void cnss_pm_wake_lock(struct wakeup_source *ws)
-{
-	__pm_stay_awake(ws);
-}
-EXPORT_SYMBOL(cnss_pm_wake_lock);
-
-void cnss_pm_wake_lock_timeout(struct wakeup_source *ws, ulong msec)
-{
-	__pm_wakeup_event(ws, msec);
-}
-EXPORT_SYMBOL(cnss_pm_wake_lock_timeout);
-
-void cnss_pm_wake_lock_release(struct wakeup_source *ws)
-{
-	__pm_relax(ws);
-}
-EXPORT_SYMBOL(cnss_pm_wake_lock_release);
-
-void cnss_pm_wake_lock_destroy(struct wakeup_source *ws)
-{
-	wakeup_source_trash(ws);
-}
-EXPORT_SYMBOL(cnss_pm_wake_lock_destroy);
-
 #ifdef CONFIG_PCI_MSM
 int cnss_wlan_pm_control(bool vote)
 {
@@ -2100,55 +2126,28 @@ void cnss_release_pm_sem(void)
 }
 EXPORT_SYMBOL(cnss_release_pm_sem);
 
-void cnss_flush_work(void *work)
+void cnss_pci_schedule_recovery_work(void)
 {
-	struct work_struct *cnss_work = work;
-	cancel_work_sync(cnss_work);
+	schedule_work(&recovery_work);
 }
-EXPORT_SYMBOL(cnss_flush_work);
 
-void cnss_flush_delayed_work(void *dwork)
-{
-	struct delayed_work *cnss_dwork = dwork;
-	cancel_delayed_work_sync(cnss_dwork);
-}
-EXPORT_SYMBOL(cnss_flush_delayed_work);
-
-void cnss_get_monotonic_boottime(struct timespec *ts)
-{
-	get_monotonic_boottime(ts);
-}
-EXPORT_SYMBOL(cnss_get_monotonic_boottime);
-
-void cnss_get_boottime(struct timespec *ts)
-{
-	ktime_get_ts(ts);
-}
-EXPORT_SYMBOL(cnss_get_boottime);
-
-void cnss_init_work(struct work_struct *work, work_func_t func)
-{
-	INIT_WORK(work, func);
-}
-EXPORT_SYMBOL(cnss_init_work);
-
-void cnss_init_delayed_work(struct delayed_work *work, work_func_t func)
-{
-	INIT_DELAYED_WORK(work, func);
-}
-EXPORT_SYMBOL(cnss_init_delayed_work);
-
-int cnss_get_ramdump_mem(unsigned long *address, unsigned long *size)
+void *cnss_pci_get_virt_ramdump_mem(unsigned long *size)
 {
 	if (!penv || !penv->pldev)
-		return -ENODEV;
+		return NULL;
 
-	*address = penv->ramdump_phys;
 	*size = penv->ramdump_size;
 
-	return 0;
+	return penv->ramdump_addr;
 }
-EXPORT_SYMBOL(cnss_get_ramdump_mem);
+
+void cnss_pci_device_crashed(void)
+{
+	if (penv && penv->subsys) {
+		subsys_set_crash_status(penv->subsys, true);
+		subsystem_restart_dev(penv->subsys);
+	}
+}
 
 void *cnss_get_virt_ramdump_mem(unsigned long *size)
 {
@@ -2169,12 +2168,6 @@ void cnss_device_crashed(void)
 	}
 }
 EXPORT_SYMBOL(cnss_device_crashed);
-
-int cnss_set_cpus_allowed_ptr(struct task_struct *task, ulong cpu)
-{
-	return set_cpus_allowed_ptr(task, cpumask_of(cpu));
-}
-EXPORT_SYMBOL(cnss_set_cpus_allowed_ptr);
 
 static int cnss_shutdown(const struct subsys_desc *subsys, bool force_stop)
 {
@@ -2338,6 +2331,31 @@ err_pcie_link_up:
 
 err_wlan_vreg_on:
 	return ret;
+}
+
+void cnss_pci_device_self_recovery(void)
+{
+	if (!penv)
+		return;
+
+	if (penv->recovery_in_progress) {
+		pr_err("cnss: Recovery already in progress\n");
+		return;
+	}
+
+	if (penv->driver_status == CNSS_LOAD_UNLOAD) {
+		pr_err("cnss: load unload in progress\n");
+		return;
+	}
+
+	penv->recovery_count++;
+	penv->recovery_in_progress = true;
+	cnss_pm_wake_lock(&penv->ws);
+	cnss_shutdown(NULL, false);
+	msleep(WLAN_RECOVERY_DELAY);
+	cnss_powerup(NULL);
+	cnss_pm_wake_lock_release(&penv->ws);
+	penv->recovery_in_progress = false;
 }
 
 static int cnss_ramdump(int enable, const struct subsys_desc *subsys)
@@ -2686,8 +2704,6 @@ static int cnss_remove(struct platform_device *pdev)
 
 	cnss_pm_wake_lock_destroy(&penv->ws);
 
-	kfree(penv->dfs_nol_info);
-
 	if (penv->bus_client)
 		msm_bus_scale_unregister_client(penv->bus_client);
 
@@ -2739,16 +2755,28 @@ static int __init cnss_initialize(void)
 static void __exit cnss_exit(void)
 {
 	struct platform_device *pdev = penv->pldev;
+
 	if (penv->ramdump_dev)
 		destroy_ramdump_device(penv->ramdump_dev);
 	if (penv->notify_modem_status)
 		subsys_notif_unregister_notifier(penv->modem_notify_handler,
-						 &mnb);
+						&mnb);
 	subsys_unregister(penv->subsys);
 	if (penv->esoc_desc)
 		devm_unregister_esoc_client(&pdev->dev, penv->esoc_desc);
 	platform_driver_unregister(&cnss_driver);
 }
+
+void cnss_request_pm_qos_type(int latency_type, u32 qos_val)
+{
+	if (!penv) {
+		pr_err("%s: penv is NULL!\n", __func__);
+		return;
+	}
+
+	pm_qos_add_request(&penv->qos_request, latency_type, qos_val);
+}
+EXPORT_SYMBOL(cnss_request_pm_qos_type);
 
 void cnss_request_pm_qos(u32 qos_val)
 {
@@ -2771,6 +2799,70 @@ void cnss_remove_pm_qos(void)
 	pm_qos_remove_request(&penv->qos_request);
 }
 EXPORT_SYMBOL(cnss_remove_pm_qos);
+
+void cnss_pci_request_pm_qos_type(int latency_type, u32 qos_val)
+{
+	if (!penv) {
+		pr_err("%s: penv is NULL\n", __func__);
+		return;
+	}
+
+	pm_qos_add_request(&penv->qos_request, latency_type, qos_val);
+}
+EXPORT_SYMBOL(cnss_pci_request_pm_qos_type);
+
+void cnss_pci_request_pm_qos(u32 qos_val)
+{
+	if (!penv) {
+		pr_err("%s: penv is NULL\n", __func__);
+		return;
+	}
+
+	pm_qos_add_request(&penv->qos_request, PM_QOS_CPU_DMA_LATENCY, qos_val);
+}
+EXPORT_SYMBOL(cnss_pci_request_pm_qos);
+
+void cnss_pci_remove_pm_qos(void)
+{
+	if (!penv) {
+		pr_err("%s: penv is NULL\n", __func__);
+		return;
+	}
+
+	pm_qos_remove_request(&penv->qos_request);
+}
+EXPORT_SYMBOL(cnss_pci_remove_pm_qos);
+
+int cnss_pci_request_bus_bandwidth(int bandwidth)
+{
+	int ret = 0;
+
+	if (!penv)
+		return -ENODEV;
+
+	if (!penv->bus_client)
+		return -ENOSYS;
+
+	switch (bandwidth) {
+	case CNSS_BUS_WIDTH_NONE:
+	case CNSS_BUS_WIDTH_LOW:
+	case CNSS_BUS_WIDTH_MEDIUM:
+	case CNSS_BUS_WIDTH_HIGH:
+		ret = msm_bus_scale_client_update_request(
+					penv->bus_client, bandwidth);
+		if (ret) {
+			pr_err(
+			"%s: could not set bus bandwidth %d, ret = %d\n",
+				__func__, bandwidth, ret);
+		}
+		break;
+
+	default:
+		pr_err("%s: Invalid request %d", __func__, bandwidth);
+		ret = -EINVAL;
+	}
+	return ret;
+}
 
 int cnss_request_bus_bandwidth(int bandwidth)
 {
@@ -2797,7 +2889,6 @@ int cnss_request_bus_bandwidth(int bandwidth)
 	default:
 		pr_err("%s: Invalid request %d", __func__, bandwidth);
 		ret = -EINVAL;
-
 	}
 	return ret;
 }
@@ -2812,7 +2903,6 @@ int cnss_get_platform_cap(struct cnss_platform_cap *cap)
 		*cap = penv->cap;
 
 	return 0;
-
 }
 EXPORT_SYMBOL(cnss_get_platform_cap);
 
@@ -2828,7 +2918,6 @@ int cnss_get_bmi_setup(void)
 		return -ENODEV;
 
 	return penv->bmi_test;
-
 }
 EXPORT_SYMBOL(cnss_get_bmi_setup);
 
@@ -2930,8 +3019,7 @@ int cnss_auto_resume(void)
 	}
 
 	if (penv->saved_state)
-		pci_load_and_free_saved_state(pdev,
-			&penv->saved_state);
+		pci_load_and_free_saved_state(pdev, &penv->saved_state);
 
 	pci_restore_state(pdev);
 	pci_set_master(pdev);

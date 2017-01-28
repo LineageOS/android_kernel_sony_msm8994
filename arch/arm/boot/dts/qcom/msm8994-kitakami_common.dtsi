@@ -399,6 +399,7 @@
 		qcom,msm-pcm-bit;
 	};
 
+
 	qcom,cpp@fda04000 {
 		qcom,min-clock-rate = <200000000>;
 	};

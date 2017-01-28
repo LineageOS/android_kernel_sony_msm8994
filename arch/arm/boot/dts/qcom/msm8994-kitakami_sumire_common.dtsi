@@ -18,6 +18,56 @@
  */
 
 &soc {
+	/delete-node/ qcom,qseecom@6500000;
+	qcom,qseecom@e900000 {
+		compatible = "qcom,qseecom";
+		reg = <0xe900000 0x1900000>;
+		reg-names = "secapp-region";
+		qcom,disk-encrypt-pipe-pair = <2>;
+		qcom,file-encrypt-pipe-pair = <0>;
+		qcom,support-multiple-ce-hw-instance;
+		qcom,hlos-num-ce-hw-instances = <2>;
+		qcom,hlos-ce-hw-instance = <1 2>;
+		qcom,qsee-ce-hw-instance = <0>;
+		qcom,msm-bus,name = "qseecom-noc";
+		qcom,msm-bus,num-cases = <4>;
+		qcom,msm-bus,num-paths = <1>;
+		qcom,support-fde;
+		qcom,support-pfe;
+		qcom,no-clock-support;
+		qcom,msm-bus,vectors-KBps =
+				<55 512 0 0>,
+				<55 512 0 0>,
+				<55 512 120000 1200000>,
+				<55 512 393600 3936000>;
+		clock-names = "core_clk", "ufs_core_clk_src", "ufs_core_clk",
+			      "ufs_bus_clk", "ufs_iface_clk";
+		clocks = <&clock_rpm clk_qseecom_ce1_clk>,
+                         <&clock_gcc clk_ufs_axi_clk_src>,
+                         <&clock_gcc clk_gcc_ufs_axi_clk>,
+                         <&clock_gcc clk_gcc_sys_noc_ufs_axi_clk>,
+			 <&clock_gcc clk_gcc_ufs_ahb_clk>;
+		qcom,ce-opp-freq = <171430000>;
+	};
+	tlmm_pinmux: pinctrl@fd510000 {
+		pmx_sdc2_clk {
+			sdc2_clk_on: clk_on {
+				drive-strength = <10>; /* 10 MA */
+			};
+		};
+
+		pmx_sdc2_cmd {
+			sdc2_cmd_on: cmd_on {
+				drive-strength = <10>; /* 10 MA */
+			};
+		};
+
+		pmx_sdc2_data {
+			sdc2_data_on: data_on {
+				drive-strength = <10>; /* 10 MA */
+			};
+		};
+	};
 	qcom,cci@fda0c000 {
 		qcom,camera@0 {
 			cell-index = <0>;
@@ -695,56 +745,6 @@
 						EXIT = <8 0x0 0 0>;
 					};
 				};
-			};
-		};
-	};
-	/delete-node/ qcom,qseecom@6500000;
-	qcom,qseecom@e900000 {
-		compatible = "qcom,qseecom";
-		reg = <0xe900000 0x1900000>;
-		reg-names = "secapp-region";
-		qcom,disk-encrypt-pipe-pair = <2>;
-		qcom,file-encrypt-pipe-pair = <0>;
-		qcom,support-multiple-ce-hw-instance;
-		qcom,hlos-num-ce-hw-instances = <2>;
-		qcom,hlos-ce-hw-instance = <1 2>;
-		qcom,qsee-ce-hw-instance = <0>;
-		qcom,msm-bus,name = "qseecom-noc";
-		qcom,msm-bus,num-cases = <4>;
-		qcom,msm-bus,num-paths = <1>;
-		qcom,support-fde;
-		qcom,support-pfe;
-		qcom,no-clock-support;
-		qcom,msm-bus,vectors-KBps =
-				<55 512 0 0>,
-				<55 512 0 0>,
-				<55 512 120000 1200000>,
-				<55 512 393600 3936000>;
-		clock-names = "core_clk", "ufs_core_clk_src", "ufs_core_clk",
-			      "ufs_bus_clk", "ufs_iface_clk";
-		clocks = <&clock_rpm clk_qseecom_ce1_clk>,
-                         <&clock_gcc clk_ufs_axi_clk_src>,
-                         <&clock_gcc clk_gcc_ufs_axi_clk>,
-                         <&clock_gcc clk_gcc_sys_noc_ufs_axi_clk>,
-			 <&clock_gcc clk_gcc_ufs_ahb_clk>;
-		qcom,ce-opp-freq = <171430000>;
-	};
-	tlmm_pinmux: pinctrl@fd510000 {
-		pmx_sdc2_clk {
-			sdc2_clk_on: clk_on {
-				drive-strength = <10>; /* 10 MA */
-			};
-		};
-
-		pmx_sdc2_cmd {
-			sdc2_cmd_on: cmd_on {
-				drive-strength = <10>; /* 10 MA */
-			};
-		};
-
-		pmx_sdc2_data {
-			sdc2_data_on: data_on {
-				drive-strength = <10>; /* 10 MA */
 			};
 		};
 	};
