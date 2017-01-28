@@ -2441,10 +2441,11 @@ int __sys_recvmmsg(int fd, struct mmsghdr __user *mmsg, unsigned int vlen,
 		 * app asks about it using getsockopt(SO_ERROR).
 		 */
 		sock->sk->sk_err = -err;
-	}
 out_put:
 	fput_light(sock->file, fput_needed);
 
+out_put:
+	fput_light(sock->file, fput_needed);
 	return datagrams;
 }
 

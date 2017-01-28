@@ -325,6 +325,7 @@ unsigned int *somc_chg_therm_get_dt(
 void somc_chg_voltage_check_start(struct chg_somc_params *params);
 void somc_chg_voltage_check_cancel(struct chg_somc_params *params);
 int somc_chg_therm_set_fastchg_current(struct chg_somc_params *params);
+void somc_chg_aicl_set_keep_state(bool state);
 int somc_chg_smb_parse_dt(struct device *dev,
 			struct chg_somc_params *params,
 			struct device_node *node);
