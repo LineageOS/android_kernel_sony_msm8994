@@ -854,8 +854,7 @@ free_and_unmap:
 						"%s: [UNMAP] binfo = 0x%pK, handle[%d] = %pK, device_addr = 0x%pa, fd = %d, offset = %d, mapped = %d\n",
 						__func__, bi, i, bi->handle[i],
 						&bi->device_addr[i], bi->fd[i],
-						bi->buff_off[i], bi->type,
-                        bi->mapped[i]);
+						bi->buff_off[i], bi->mapped[i]);
 					msm_comm_smem_free(inst,
 							bi->handle[i]);
 				}

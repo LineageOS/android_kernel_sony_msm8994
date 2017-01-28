@@ -2706,10 +2706,10 @@ static int dwc3_msm_power_set_property_usb(struct power_supply *psy,
 		if ((mdwc->charger.chg_type == DWC3_SDP_CHARGER) &&
 				(mdwc->chg_state != USB_CHG_STATE_DETECTED)) {
 			dev_dbg(mdwc->dev, "%s: SDP/MHL/FLOATED\n", __func__);
-			mdwc->charger.chg_type = DWC3_INVALID_CHARGER;
-			wake_lock_timeout(&mdwc->id_wakelock,
-						USB_ID_WAKE_LOCK_TIMEOUT);
-			queue_work(system_nrt_wq, &mdwc->id_work);
+			//mdwc->charger.chg_type = DWC3_INVALID_CHARGER;
+			//wake_lock_timeout(&mdwc->id_wakelock,
+			//			USB_ID_WAKE_LOCK_TIMEOUT);
+			//queue_work(system_nrt_wq, &mdwc->id_work);
 		}
 
 		if (mdwc->charger.chg_type != DWC3_INVALID_CHARGER)

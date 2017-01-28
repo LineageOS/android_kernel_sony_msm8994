@@ -58,6 +58,7 @@ void zpool_unmap_handle(struct zpool *pool, unsigned long handle);
 
 u64 zpool_get_total_size(struct zpool *pool);
 
+unsigned long zpool_compact(struct zpool *pool);
 
 /**
  * struct zpool_driver - driver implementation for zpool
@@ -96,6 +97,11 @@ struct zpool_driver {
 	void (*unmap)(void *pool, unsigned long handle);
 
 	u64 (*total_size)(void *pool);
+<<<<<<< HEAD
+=======
+
+	unsigned long (*compact)(void *pool);
+>>>>>>> 64f999d... 32.3.A.0.372
 };
 
 void zpool_register_driver(struct zpool_driver *driver);
