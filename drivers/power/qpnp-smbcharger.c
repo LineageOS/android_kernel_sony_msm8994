@@ -2682,6 +2682,7 @@ static int smbchg_system_temp_level_set(struct smbchg_chip *chip,
 #ifdef CONFIG_QPNP_SMBCHARGER_EXTENSION
 	somc_chg_therm_set_hvdcp_en(&chip->somc_params);
 	rc = smbchg_set_thermal_limited_usb_current_max(chip, CURRENT_RESET_MA);
+	somc_chg_aicl_set_keep_state(false);
 #else
 	rc = smbchg_set_thermal_limited_usb_current_max(chip,
 					chip->usb_target_current_ma);

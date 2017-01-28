@@ -674,9 +674,7 @@ enum vidc_status hfi_process_sess_init_done_prop_read(
 		}
 		default:
 			dprintk(VIDC_DBG,
-				"%s: default case - data_ptr %pK, prop_id 0x%x\n",
-				__func__, data_ptr, prop_id);
-			break;
+				"%s default case - 0x%x\n", __func__, prop_id);
 		}
 		rem_bytes -= next_offset;
 		data_ptr += next_offset;

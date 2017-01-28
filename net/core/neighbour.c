@@ -55,6 +55,7 @@ static void neigh_update_notify(struct neighbour *neigh);
 static int pneigh_ifdown(struct neigh_table *tbl, struct net_device *dev);
 
 static struct neigh_table *neigh_tables;
+static unsigned neigh_probe_enable;
 #ifdef CONFIG_PROC_FS
 static const struct file_operations neigh_stat_seq_fops;
 #endif
@@ -700,7 +701,7 @@ void neigh_destroy(struct neighbour *neigh)
 	NEIGH_CACHE_STAT_INC(neigh->tbl, destroys);
 
 	if (!neigh->dead) {
-		pr_warn("Destroying alive neighbour %p\n", neigh);
+		pr_warn("Destroying alive neighbour %pK\n", neigh);
 		dump_stack();
 		return;
 	}
@@ -949,7 +950,11 @@ static void neigh_timer_handler(unsigned long arg)
 		if (!mod_timer(&neigh->timer, next))
 			neigh_hold(neigh);
 	}
-	if (neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE | NUD_STALE)) {
+
+	if (neigh_probe_enable) {
+		if (neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE | NUD_STALE))
+			neigh_probe(neigh);
+	} else if (neigh->nud_state & (NUD_INCOMPLETE | NUD_PROBE)) {
 		neigh_probe(neigh);
 	} else {
 out:
@@ -1239,9 +1244,20 @@ struct neighbour *neigh_event_ns(struct neigh_table *tbl,
 {
 	struct neighbour *neigh = __neigh_lookup(tbl, saddr, dev,
 						 lladdr || !dev->addr_len);
-	if (neigh)
-		neigh_update(neigh, lladdr, NUD_STALE,
-			     NEIGH_UPDATE_F_OVERRIDE);
+	if (neigh) {
+		if (neigh_probe_enable) {
+			if (!(neigh->nud_state == NUD_REACHABLE)) {
+				neigh_update(neigh, lladdr, NUD_STALE,
+					NEIGH_UPDATE_F_OVERRIDE);
+				write_lock(&neigh->lock);
+				neigh_probe(neigh);
+				neigh_update_notify(neigh);
+			}
+		} else {
+				neigh_update(neigh, lladdr, NUD_STALE,
+				NEIGH_UPDATE_F_OVERRIDE);
+		}
+	}
 	return neigh;
 }
 EXPORT_SYMBOL(neigh_event_ns);
@@ -1317,7 +1333,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 out:
 	return rc;
 discard:
-	neigh_dbg(1, "%s: dst=%p neigh=%p\n", __func__, dst, neigh);
+	neigh_dbg(1, "%s: dst=%pK neigh=%pK\n", __func__, dst, neigh);
 out_kfree_skb:
 	rc = -EINVAL;
 	kfree_skb(skb);
@@ -2810,6 +2826,7 @@ enum {
 	NEIGH_VAR_GC_THRESH1,
 	NEIGH_VAR_GC_THRESH2,
 	NEIGH_VAR_GC_THRESH3,
+	NEIGH_VAR_PROBE,
 	NEIGH_VAR_MAX
 };
 
@@ -2933,6 +2950,12 @@ static struct neigh_sysctl_table {
 			.mode		= 0644,
 			.proc_handler	= proc_dointvec,
 		},
+		[NEIGH_VAR_PROBE] = {
+			.procname	= "neigh_probe",
+			.maxlen		= sizeof(int),
+			.mode		= 0644,
+			.proc_handler	= proc_dointvec,
+		},
 		{},
 	},
 };
@@ -2963,6 +2986,7 @@ int neigh_sysctl_register(struct net_device *dev, struct neigh_parms *p,
 	t->neigh_vars[NEIGH_VAR_LOCKTIME].data = &p->locktime;
 	t->neigh_vars[NEIGH_VAR_RETRANS_TIME_MS].data  = &p->retrans_time;
 	t->neigh_vars[NEIGH_VAR_BASE_REACHABLE_TIME_MS].data  = &p->base_reachable_time;
+	t->neigh_vars[NEIGH_VAR_PROBE].data  = &neigh_probe_enable;
 
 	if (dev) {
 		dev_name_source = dev->name;

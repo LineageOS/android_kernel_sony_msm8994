@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, 2016 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1036,6 +1036,7 @@ static int msm_compr_ioctl_shared(struct snd_pcm_substream *substream,
 			struct snd_dec_ddp *ddp =
 				&compr->info.codec_param.codec.options.ddp;
 			uint32_t params_length = 0;
+			memset(params_value, 0, MAX_AC3_PARAM_SIZE);
 			/* check integer overflow */
 			if (ddp->params_length > UINT_MAX/sizeof(int)) {
 				pr_err("%s: Integer overflow ddp->params_length %d\n",
@@ -1076,6 +1077,7 @@ static int msm_compr_ioctl_shared(struct snd_pcm_substream *substream,
 			struct snd_dec_ddp *ddp =
 				&compr->info.codec_param.codec.options.ddp;
 			uint32_t params_length = 0;
+			memset(params_value, 0, MAX_AC3_PARAM_SIZE);
 			/* check integer overflow */
 			if (ddp->params_length > UINT_MAX/sizeof(int)) {
 				pr_err("%s: Integer overflow ddp->params_length %d\n",

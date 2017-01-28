@@ -25,6 +25,8 @@ enum mapping_flags {
 	AS_MM_ALL_LOCKS	= __GFP_BITS_SHIFT + 2,	/* under mm_take_all_locks() */
 	AS_UNEVICTABLE	= __GFP_BITS_SHIFT + 3,	/* e.g., ramdisk, SHM_LOCK */
 	AS_BALLOON_MAP  = __GFP_BITS_SHIFT + 4, /* balloon page special map */
+	/* writeback related tags are not used */
+	AS_NO_WRITEBACK_TAGS = __GFP_BITS_SHIFT + 5,
 };
 
 static inline void mapping_set_error(struct address_space *mapping, int error)
@@ -67,6 +69,16 @@ static inline void mapping_clear_balloon(struct address_space *mapping)
 static inline int mapping_balloon(struct address_space *mapping)
 {
 	return mapping && test_bit(AS_BALLOON_MAP, &mapping->flags);
+}
+
+static inline void mapping_set_no_writeback_tags(struct address_space *mapping)
+{
+	set_bit(AS_NO_WRITEBACK_TAGS, &mapping->flags);
+}
+
+static inline int mapping_use_writeback_tags(struct address_space *mapping)
+{
+	return !test_bit(AS_NO_WRITEBACK_TAGS, &mapping->flags);
 }
 
 static inline gfp_t mapping_gfp_mask(struct address_space * mapping)
@@ -254,6 +266,9 @@ typedef int filler_t(void *, struct page *);
 
 extern struct page * find_get_page(struct address_space *mapping,
 				pgoff_t index);
+pgoff_t page_cache_next_hole(struct address_space *mapping,
+                             pgoff_t index, unsigned long max_scan);
+
 extern struct page * find_lock_page(struct address_space *mapping,
 				pgoff_t index);
 extern struct page * find_or_create_page(struct address_space *mapping,
@@ -400,7 +415,7 @@ static inline int wait_on_page_locked_killable(struct page *page)
 	return 0;
 }
 
-/* 
+/*
  * Wait for a page to be unlocked.
  *
  * This must be called with the caller "holding" the page,
@@ -413,7 +428,7 @@ static inline void wait_on_page_locked(struct page *page)
 		wait_on_page_bit(page, PG_locked);
 }
 
-/* 
+/*
  * Wait for a page to complete writeback
  */
 static inline void wait_on_page_writeback(struct page *page)

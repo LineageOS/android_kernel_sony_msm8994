@@ -2444,7 +2444,6 @@ int __sys_recvmmsg(int fd, struct mmsghdr __user *mmsg, unsigned int vlen,
 	}
 out_put:
 	fput_light(sock->file, fput_needed);
-
 	return datagrams;
 }
 

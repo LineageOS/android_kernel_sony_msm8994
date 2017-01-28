@@ -1096,8 +1096,8 @@ static int do_ipv6_getsockopt(struct sock *sk, int level, int optname,
 	case IPV6_RTHDR:
 	case IPV6_DSTOPTS:
 	{
-
 		struct ipv6_txoptions *opt;
+
 		lock_sock(sk);
 		opt = rcu_dereference_protected(np->opt, sock_owned_by_user(sk));
 		len = ipv6_getsockopt_sticky(sk, opt, optname, optval, len);

@@ -247,6 +247,14 @@ struct ipv6_fl_socklist {
 	struct rcu_head			rcu;
 };
 
+extern struct ip6_flowlabel	*fl6_sock_lookup(struct sock *sk, __be32 label);
+extern struct ipv6_txoptions	*fl6_merge_options(struct ipv6_txoptions * opt_space,
+						   struct ip6_flowlabel * fl,
+						   struct ipv6_txoptions * fopt);
+extern void			fl6_free_socklist(struct sock *sk);
+extern int			ipv6_flowlabel_opt(struct sock *sk, char __user *optval, int optlen);
+extern int			ip6_flowlabel_init(void);
+extern void			ip6_flowlabel_cleanup(void);
 static inline struct ipv6_txoptions *txopt_get(const struct ipv6_pinfo *np)
 {
 	struct ipv6_txoptions *opt;
@@ -264,15 +272,6 @@ static inline void txopt_put(struct ipv6_txoptions *opt)
 	if (opt && atomic_dec_and_test(&opt->refcnt))
 		kfree_rcu(opt, rcu);
 }
-
-extern struct ip6_flowlabel	*fl6_sock_lookup(struct sock *sk, __be32 label);
-extern struct ipv6_txoptions	*fl6_merge_options(struct ipv6_txoptions * opt_space,
-						   struct ip6_flowlabel * fl,
-						   struct ipv6_txoptions * fopt);
-extern void			fl6_free_socklist(struct sock *sk);
-extern int			ipv6_flowlabel_opt(struct sock *sk, char __user *optval, int optlen);
-extern int			ip6_flowlabel_init(void);
-extern void			ip6_flowlabel_cleanup(void);
 
 static inline void fl6_sock_release(struct ip6_flowlabel *fl)
 {
