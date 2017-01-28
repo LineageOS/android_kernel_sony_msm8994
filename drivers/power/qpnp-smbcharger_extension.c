@@ -1037,7 +1037,7 @@ static void somc_chg_remove_sysfs_entries(struct device *dev)
 		device_remove_file(dev, &somc_chg_attrs[i]);
 }
 
-static void somc_chg_aicl_set_keep_state(bool state)
+void somc_chg_aicl_set_keep_state(bool state)
 {
 	chg_params->aicl_keep_state = state;
 	if (state)

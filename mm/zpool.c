@@ -347,6 +347,20 @@ u64 zpool_get_total_size(struct zpool *zpool)
 	return zpool->driver->total_size(zpool->pool);
 }
 
+/**
+ * zpool_compact() - trigger backend-specific pool compaction
+ * @pool	The zpool to compact
+ *
+ * This returns the total size in bytes of the pool.
+ *
+ * Returns: Number of pages compacted
+ */
+unsigned long zpool_compact(struct zpool *zpool)
+{
+	return zpool->driver->compact ?
+		zpool->driver->compact(zpool->pool) : 0;
+}
+
 static int __init init_zpool(void)
 {
 	pr_info("loaded\n");

@@ -2737,8 +2737,7 @@ static int venus_hfi_session_abort(void *sess)
 	struct hal_session *session;
 	session = sess;
 	if (!session || !session->device) {
-		dprintk(VIDC_ERR, "%s: Invalid Params %pK\n",
-			__func__, session);
+		dprintk(VIDC_ERR, "Invalid Params\n");
 		return -EINVAL;
 	}
 	venus_hfi_flush_debug_queue(
@@ -2757,8 +2756,7 @@ static int venus_hfi_session_set_buffers(void *sess,
 	struct venus_hfi_device *device;
 
 	if (!session || !session->device || !buffer_info) {
-		dprintk(VIDC_ERR, "%s: Invalid Params, %pK %pK\n",
-			__func__, session, buffer_info);
+		dprintk(VIDC_ERR, "Invalid Params\n");
 		return -EINVAL;
 	}
 	device = session->device;
@@ -2792,8 +2790,7 @@ static int venus_hfi_session_release_buffers(void *sess,
 	struct venus_hfi_device *device;
 
 	if (!session || !session->device || !buffer_info) {
-		dprintk(VIDC_ERR, "%s: Invalid Params %pK, %pK\n",
-			__func__, session, buffer_info);
+		dprintk(VIDC_ERR, "Invalid Params\n");
 		return -EINVAL;
 	}
 	device = session->device;
@@ -3381,7 +3378,7 @@ static void venus_hfi_response_handler(struct venus_hfi_device *device)
 		}
 		venus_hfi_flush_debug_queue(device, packet);
 	} else {
-		dprintk(VIDC_DBG, "device (%pK) is in deinit state\n", device);
+		dprintk(VIDC_ERR, "SPURIOUS_INTERRUPT\n");
 	}
 }
 
