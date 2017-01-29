@@ -9,6 +9,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2014 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 #include <linux/io.h>
 #include <linux/atomic.h>
 #include <media/v4l2-subdev.h>
@@ -59,7 +64,7 @@ static int msm_isp_stats_cfg_ping_pong_address(struct vfe_device *vfe_dev,
 			!dual_vfe_res->stats_data[ISP_VFE0] ||
 			!dual_vfe_res->vfe_base[ISP_VFE1] ||
 			!dual_vfe_res->stats_data[ISP_VFE1]) {
-			pr_err("%s:%d error vfe0 %p %p vfe1 %p %p\n", __func__,
+			pr_err("%s:%d error vfe0 %pK %pK vfe1 %pK %pK\n", __func__,
 				__LINE__, dual_vfe_res->vfe_base[ISP_VFE0],
 				dual_vfe_res->stats_data[ISP_VFE0],
 				dual_vfe_res->vfe_base[ISP_VFE1],
@@ -108,7 +113,7 @@ static int32_t msm_isp_stats_buf_divert(struct vfe_device *vfe_dev,
 
 	if (!vfe_dev || !done_buf || !ts || !buf_event || !stream_info ||
 		!comp_stats_type_mask) {
-		pr_err("%s:%d failed: invalid params %p %p %p %p %p %p\n",
+		pr_err("%s:%d failed: invalid params %pK %pK %pK %pK %pK %pK\n",
 			__func__, __LINE__, vfe_dev, done_buf, ts, buf_event,
 			stream_info, comp_stats_type_mask);
 		return -EINVAL;
@@ -532,11 +537,20 @@ static int msm_isp_stats_wait_for_cfg_done(struct vfe_device *vfe_dev)
 	int rc;
 	init_completion(&vfe_dev->stats_config_complete);
 	atomic_set(&vfe_dev->stats_data.stats_update, 2);
+#if defined(CONFIG_SONY_CAM_V4L2)
+	rc = wait_for_completion_timeout(
+		&vfe_dev->stats_config_complete,
+		msecs_to_jiffies(vfe_dev->timeout));
+#else
 	rc = wait_for_completion_timeout(
 		&vfe_dev->stats_config_complete,
 		msecs_to_jiffies(VFE_MAX_CFG_TIMEOUT));
+#endif
 	if (rc == 0) {
 		pr_err("%s: wait timeout\n", __func__);
+#if defined(CONFIG_SONY_CAM_V4L2)
+		vfe_dev->timeout = 100;
+#endif
 		rc = -1;
 	} else {
 		rc = 0;

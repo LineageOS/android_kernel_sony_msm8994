@@ -192,6 +192,7 @@ static void verity_hash_at_level(struct dm_verity *v, sector_t block, int level,
 /*
  * Handle verification errors.
  */
+#ifndef CONFIG_PANIC_ON_DM_VERITY_ERRORS
 static int verity_handle_err(struct dm_verity *v, enum verity_block_type type,
 			     unsigned long long block)
 {
@@ -239,7 +240,7 @@ out:
 
 	return 1;
 }
-
+#endif
 /*
  * Verify hash of a metadata block pertaining to the specified data block
  * ("block" argument) at a specified level ("level" argument).
@@ -281,6 +282,10 @@ static int verity_verify_level(struct dm_verity *v, struct dm_verity_io *io,
 				verity_io_real_digest(v, io));
 		if (unlikely(r < 0))
 			goto release_ret_r;
+#ifdef CONFIG_PANIC_ON_DM_VERITY_ERRORS
+			panic("dm-verity: metadata block %llu is corrupted",
+					(unsigned long long)hash_block);
+#else
 
 		if (likely(memcmp(verity_io_real_digest(v, io), want_digest,
 				  v->digest_size) == 0))
@@ -295,6 +300,7 @@ static int verity_verify_level(struct dm_verity *v, struct dm_verity_io *io,
 			r = -EIO;
 			goto release_ret_r;
 		}
+#endif
 	}
 
 	data += offset;
@@ -436,6 +442,10 @@ static int verity_verify_io(struct dm_verity_io *io)
 
 			continue;
 		}
+#ifdef CONFIG_PANIC_ON_DM_VERITY_ERRORS
+			panic("dm-verity: data block %llu is corrupted",
+				(unsigned long long)(io->block + b));
+#else
 
 		r = verity_hash_init(v, desc);
 		if (unlikely(r < 0))
@@ -462,6 +472,7 @@ static int verity_verify_io(struct dm_verity_io *io)
 		else if (verity_handle_err(v, DM_VERITY_BLOCK_TYPE_DATA,
 					   io->block + b))
 			return -EIO;
+#endif
 	}
 	BUG_ON(vector != io->io_vec_size);
 	BUG_ON(offset);

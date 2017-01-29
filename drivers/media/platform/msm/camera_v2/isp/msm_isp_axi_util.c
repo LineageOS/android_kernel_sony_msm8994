@@ -9,6 +9,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+/*
+ * NOTE: This file has been modified by Sony Mobile Communications Inc.
+ * Modifications are Copyright (c) 2014 Sony Mobile Communications Inc,
+ * and licensed under the license of the file.
+ */
 #include <linux/io.h>
 #include <media/v4l2-subdev.h>
 #include <asm/div64.h>
@@ -271,8 +276,13 @@ static uint32_t msm_isp_axi_get_plane_size(
 			size = plane_cfg[plane_idx].output_height *
 				plane_cfg[plane_idx].output_width;
 		else
+#if defined(CONFIG_SONY_CAM_V4L2)
+			size = plane_cfg[plane_idx].output_height *
+				plane_cfg[plane_idx].output_width / 2;
+#else
 			size = plane_cfg[plane_idx].output_height *
 				plane_cfg[plane_idx].output_width;
+#endif
 		break;
 	case V4L2_PIX_FMT_NV14:
 	case V4L2_PIX_FMT_NV41:
@@ -988,7 +998,7 @@ static int  msm_isp_axi_stream_enable_cfg(
 				!dual_vfe_res->axi_data[ISP_VFE0] ||
 				!dual_vfe_res->vfe_base[ISP_VFE1] ||
 				!dual_vfe_res->axi_data[ISP_VFE1]) {
-				pr_err("%s:%d failed vfe0 %p %p vfe %p %p\n",
+				pr_err("%s:%d failed vfe0 %pK %pK vfe %pK %pK\n",
 					__func__, __LINE__,
 					dual_vfe_res->vfe_base[ISP_VFE0],
 					dual_vfe_res->axi_data[ISP_VFE0],
@@ -1063,6 +1073,12 @@ void msm_isp_axi_stream_update(struct vfe_device *vfe_dev,
 			axi_data->stream_info[i].state =
 				axi_data->stream_info[i].state ==
 				START_PENDING ? STARTING : STOPPING;
+#if defined(CONFIG_SONY_CAM_V4L2)
+				if (axi_data->stream_info[i].state == STOPPING) {
+					axi_data->stream_info[i].state = INACTIVE;
+					vfe_dev->axi_data.stream_update[frame_src] = 1;
+				}
+#endif
 		} else if (axi_data->stream_info[i].state == STARTING ||
 			axi_data->stream_info[i].state == STOPPING) {
 			axi_data->stream_info[i].state =
@@ -1318,7 +1334,7 @@ static int msm_isp_cfg_ping_pong_address(struct vfe_device *vfe_dev,
 				!dual_vfe_res->axi_data[ISP_VFE0] ||
 				!dual_vfe_res->vfe_base[ISP_VFE1] ||
 				!dual_vfe_res->axi_data[ISP_VFE1]) {
-				pr_err("%s:%d failed vfe0 %p %p vfe %p %p\n",
+				pr_err("%s:%d failed vfe0 %pK %pK vfe %pK %pK\n",
 					__func__, __LINE__,
 					dual_vfe_res->vfe_base[ISP_VFE0],
 					dual_vfe_res->axi_data[ISP_VFE0],
@@ -1528,7 +1544,7 @@ int msm_isp_drop_frame(struct vfe_device *vfe_dev,
 	int rc = -1;
 
 	if (!vfe_dev || !stream_info || !ts || !output_info) {
-		pr_err("%s %d  vfe_dev %p stream_info %p ts %p op_info %p\n",
+		pr_err("%s %d  vfe_dev %pK stream_info %pK ts %pK op_info %pK\n",
 			 __func__, __LINE__, vfe_dev, stream_info, ts,
 			output_info);
 		return -EINVAL;
@@ -1722,9 +1738,15 @@ static int msm_isp_axi_wait_for_cfg_done(struct vfe_device *vfe_dev,
 		vfe_dev->axi_data.pipeline_update = camif_update;
 	}
 	spin_unlock_irqrestore(&vfe_dev->shared_data_lock, flags);
+#if defined(CONFIG_SONY_CAM_V4L2)
+	rc = wait_for_completion_timeout(
+		&vfe_dev->stream_config_complete,
+		msecs_to_jiffies(vfe_dev->timeout));
+#else
 	rc = wait_for_completion_timeout(
 		&vfe_dev->stream_config_complete,
 		msecs_to_jiffies(VFE_MAX_CFG_TIMEOUT));
+#endif
 	if (rc == 0) {
 		for (i = 0; i < VFE_SRC_MAX; i++) {
 			if (src_mask & (1 << i)) {
@@ -1736,6 +1758,9 @@ static int msm_isp_axi_wait_for_cfg_done(struct vfe_device *vfe_dev,
 			}
 		}
 		pr_err("%s: wait timeout\n", __func__);
+#if defined(CONFIG_SONY_CAM_V4L2)
+		vfe_dev->timeout = 100;
+#endif
 		rc = -EBUSY;
 	} else {
 		rc = 0;
@@ -1843,7 +1868,7 @@ int msm_isp_axi_reset(struct vfe_device *vfe_dev,
 	uint32_t bufq_handle = 0, bufq_id = 0;
 
 	if (!reset_cmd) {
-		pr_err("%s: NULL pointer reset cmd %p\n", __func__, reset_cmd);
+		pr_err("%s: NULL pointer reset cmd %pK\n", __func__, reset_cmd);
 		rc = -1;
 		return rc;
 	}
@@ -1873,7 +1898,7 @@ int msm_isp_axi_reset(struct vfe_device *vfe_dev,
 			bufq = vfe_dev->buf_mgr->ops->get_bufq(vfe_dev->buf_mgr,
 				bufq_handle);
 			if (!bufq) {
-				pr_err("%s: bufq null %p by handle %x\n",
+				pr_err("%s: bufq null %pK by handle %x\n",
 					__func__, bufq, bufq_handle);
 				continue;
 			}
@@ -2746,7 +2771,7 @@ void msm_isp_axi_disable_all_wm(struct vfe_device *vfe_dev)
 	int i, j;
 
 	if (!vfe_dev || !axi_data) {
-		pr_err("%s: error %p %p\n", __func__, vfe_dev, axi_data);
+		pr_err("%s: error %pK %pK\n", __func__, vfe_dev, axi_data);
 		return;
 	}
 
