@@ -410,7 +410,7 @@ static void unix_dgram_peer_wake_disconnect_wakeup(struct sock *sk,
 /* preconditions:
  *	- unix_peer(sk) == other
  *	- association is stable
-*/
+ */
 static int unix_dgram_peer_wake_me(struct sock *sk, struct sock *other)
 {
 	int connected;
@@ -426,7 +426,7 @@ static int unix_dgram_peer_wake_me(struct sock *sk, struct sock *other)
 	return 0;
 }
 
-static inline int unix_writable(struct sock *sk)
+static int unix_writable(const struct sock *sk)
 {
 	return (atomic_read(&sk->sk_wmem_alloc) << 2) <= sk->sk_sndbuf;
 }

@@ -432,7 +432,7 @@ static void handle_sys_init_done(enum command_response cmd, void *data)
 				HAL_VIDEO_CODEC_MVC;
 	dprintk(VIDC_DBG, "supported_codecs: enc = 0x%x, dec = 0x%x\n",
 		core->enc_codec_supported, core->dec_codec_supported);
-	dprintk(VIDC_DBG, "ptr[%d] = %p\n", index, &(core->completions[index]));
+	dprintk(VIDC_DBG, "ptr[%d] = %pK\n", index, &(core->completions[index]));
 	complete(&(core->completions[index]));
 }
 
@@ -618,8 +618,8 @@ static void handle_session_init_done(enum command_response cmd, void *data)
 			response->data;
 		inst = (struct msm_vidc_inst *)response->session_id;
 		if (!inst || !inst->core || !inst->core->device) {
-			dprintk(VIDC_ERR,
-			"%s: invalid parameters, inst %pK\n", __func__, inst);
+			dprintk(VIDC_ERR, "%s: invalid parameters (0x%pK)\n",
+				__func__, inst);
 			return;
 		}
 
@@ -692,7 +692,8 @@ static void handle_event_change(enum command_response cmd, void *data)
 			struct buffer_info *binfo = NULL, *temp = NULL;
 			u32 *ptr = NULL;
 
-		dprintk(VIDC_DBG, "%s - inst: %pK buffer: 0x%pa extra: 0x%pa\n",
+			dprintk(VIDC_DBG,
+				"%s - inst: %pK buffer: 0x%pa extra: 0x%pa\n",
 				__func__, inst, &event_notify->packet_buffer,
 				&event_notify->extra_data_buffer);
 
@@ -1066,12 +1067,15 @@ static void handle_session_error(enum command_response cmd, void *data)
 	change_inst_state(inst, MSM_VIDC_CORE_INVALID);
 
 	if (response->status == VIDC_ERR_MAX_CLIENTS) {
-		dprintk(VIDC_WARN, "Too many clients, rejecting %pK", inst);
+		dprintk(VIDC_WARN,
+			"send max clients reached error to client: %pK\n",
+			inst);
 		msm_vidc_queue_v4l2_event(inst,
 			V4L2_EVENT_MSM_VIDC_MAX_CLIENTS);
 	} else {
-		dprintk(VIDC_WARN, "Unknown session error (%d) for %pK\n",
-				response->status, inst);			
+		dprintk(VIDC_ERR,
+			"send session error to client: %pK\n",
+			inst);
 		msm_vidc_queue_v4l2_event(inst,
 			V4L2_EVENT_MSM_VIDC_SYS_ERROR);
 	}
