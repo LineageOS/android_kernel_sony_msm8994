@@ -1096,6 +1096,7 @@ static int do_ipv6_getsockopt(struct sock *sk, int level, int optname,
 	case IPV6_RTHDR:
 	case IPV6_DSTOPTS:
 	{
+		struct ipv6_txoptions *opt;
 
 		struct ipv6_txoptions *opt;
 		lock_sock(sk);

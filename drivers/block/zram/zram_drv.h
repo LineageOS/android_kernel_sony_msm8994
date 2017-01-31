@@ -21,7 +21,7 @@
 #define _ZRAM_DRV_H_
 
 #include <linux/spinlock.h>
-#include "../../staging/zsmalloc/zsmalloc.h"
+#include <linux/zpool.h>
 
 #include "zcomp.h"
 
@@ -37,7 +37,7 @@ static const unsigned max_num_devices = 32;
  * Pages that compress to size greater than this are stored
  * uncompressed in memory.
  */
-static const size_t max_zpage_size = PAGE_SIZE / 4 * 3;
+static const size_t max_zpage_size = PAGE_SIZE / 10 * 9;
 
 /*
  * NOTE: max_zpage_size must be less than or equal to:
@@ -89,6 +89,7 @@ struct zram_stats {
 	atomic64_t compr_data_size;	/* compressed size of pages stored */
 	atomic64_t num_reads;	/* failed + successful */
 	atomic64_t num_writes;	/* --do-- */
+	atomic64_t num_migrated;	/* no. of migrated object */
 	atomic64_t failed_reads;	/* can happen when memory is too low */
 	atomic64_t failed_writes;	/* can happen when memory is too low */
 	atomic64_t invalid_io;	/* non-page-aligned I/O requests */
@@ -100,30 +101,30 @@ struct zram_stats {
 
 struct zram_meta {
 	struct zram_table_entry *table;
-	struct zs_pool *mem_pool;
+	struct zpool *mem_pool;
 };
 
 struct zram {
 	struct zram_meta *meta;
-	struct request_queue *queue;
-	struct gendisk *disk;
 	struct zcomp *comp;
-
-	/* Prevent concurrent execution of device init, reset and R/W request */
+	struct gendisk *disk;
+	/* Prevent concurrent execution of device init */
 	struct rw_semaphore init_lock;
+	/*
+	 * the number of pages zram can consume for storing compressed data
+	 */
+	unsigned long limit_pages;
+	int max_comp_streams;
+
+	struct zram_stats stats;
+	atomic_t refcount; /* refcount for zram_meta */
+	/* wait all IO under all of cpu are done */
+	wait_queue_head_t io_done;
 	/*
 	 * This is the limit on amount of *uncompressed* worth of data
 	 * we can store in a disk.
 	 */
 	u64 disksize;	/* bytes */
-
-	int max_comp_streams;
-	struct zram_stats stats;
-	/*
-	 * the number of pages zram can consume for storing compressed data
-	 */
-	unsigned long limit_pages;
-
 	char compressor[10];
 };
 #endif

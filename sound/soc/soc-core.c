@@ -2110,7 +2110,6 @@ unsigned int snd_soc_read(struct snd_soc_codec *codec, unsigned int reg)
 	} else {
 		ret = -EIO;
 	}
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(snd_soc_read);

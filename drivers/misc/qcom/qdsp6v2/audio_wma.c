@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2016, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -47,7 +47,8 @@ static long audio_ioctl_shared(struct file *file, unsigned int cmd,
 			/* Configure PCM output block */
 			rc = q6asm_enc_cfg_blk_pcm(audio->ac,
 					audio->pcm_cfg.sample_rate,
-					audio->pcm_cfg.channel_count);
+					audio->pcm_cfg.channel_count,
+					false);
 			if (rc < 0) {
 				pr_err("pcm output block config failed\n");
 				break;
@@ -165,6 +166,8 @@ static long audio_compat_ioctl(struct file *file, unsigned int cmd,
 	case AUDIO_GET_WMA_CONFIG_V2_32: {
 		struct msm_audio_wma_config_v2 *wma_config;
 		struct msm_audio_wma_config_v2_32 wma_config_32;
+
+		memset(&wma_config_32, 0, sizeof(wma_config_32));
 
 		wma_config = (struct msm_audio_wma_config_v2 *)audio->codec_cfg;
 		wma_config_32.format_tag = wma_config->format_tag;

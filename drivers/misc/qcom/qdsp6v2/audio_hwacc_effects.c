@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2016, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -20,7 +20,6 @@
 #include <sound/msm-dts-eagle.h>
 
 #define MAX_CHANNELS_SUPPORTED		8
-#define MAX_PP_PARAMS_SZ		128
 #define WAIT_TIMEDOUT_DURATION_SECS	1
 
 struct q6audio_effects {
@@ -194,7 +193,8 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned cmd,
 			effects->config.input.num_channels);
 		rc = q6asm_enc_cfg_blk_pcm(effects->ac,
 					   effects->config.input.sample_rate,
-					   effects->config.input.num_channels);
+					   effects->config.input.num_channels,
+					   false);
 		if (rc < 0) {
 			pr_err("%s: pcm read block config failed\n", __func__);
 			rc = -EINVAL;
@@ -621,6 +621,8 @@ static long audio_effects_compat_ioctl(struct file *file, unsigned int cmd,
 	}
 	case AUDIO_EFFECTS_GET_BUF_AVAIL32: {
 		struct msm_hwacc_buf_avail32 buf_avail;
+
+		memset(&buf_avail, 0, sizeof(buf_avail));
 
 		buf_avail.input_num_avail = atomic_read(&effects->in_count);
 		buf_avail.output_num_avail = atomic_read(&effects->out_count);
