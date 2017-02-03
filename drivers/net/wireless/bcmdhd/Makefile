@@ -172,6 +172,9 @@ DHDCFLAGS += -DUSE_INITIAL_SHORT_DWELL_TIME
 
 DHDCFLAGS += -DWL_ABORT_SCAN
 
+# Disable to delay link down event
+DHDCFLAGS += -DDISABLE_BCN_DLY
+
 ##############################
 # Android Platform Definition
 ##############################
@@ -411,6 +414,8 @@ DHDCFLAGS += -DGET_CUSTOM_MAC_ENABLE
 # Default Beacon timeout
 ifneq ($(CONFIG_SOMC_WLAN_BCN_TIMEOUT),)
   DHDCFLAGS += -DSOMC_WLAN_BCN_TIMEOUT=$(CONFIG_SOMC_WLAN_BCN_TIMEOUT)
+else
+  DHDCFLAGS += -DSOMC_WLAN_BCN_TIMEOUT=3
 endif
 
 # The number of the maximum devices which phone can associate
@@ -440,11 +445,6 @@ ifneq ($(CONFIG_SOMC_WLAN_1DK_NV_PATH),)
 ifneq ($(CONFIG_SOMC_WLAN_LOW_POWER_NV_PATH),)
   DHDCFLAGS += -DSOMC_LOW_POWER_NV_PATH=\"$(CONFIG_SOMC_WLAN_LOW_POWER_NV_PATH)\"
 endif
-endif
-
-# Disable to delay link down event
-ifeq ($(CONFIG_SOMC_WLAN_DISABLE_BCM_DLY),y)
-  DHDCFLAGS += -DDISABLE_BCN_DLY
 endif
 
 # Change scan time

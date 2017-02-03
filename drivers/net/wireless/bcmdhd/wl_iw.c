@@ -695,7 +695,7 @@ wl_iw_get_range(
 )
 {
 	struct iw_range *range = (struct iw_range *) extra;
-	static int channels[MAXCHANNEL+1];
+	static int channels[MAXCHANNEL];
 	wl_uint32_list_t *list = (wl_uint32_list_t *) channels;
 	wl_rateset_t rateset;
 	int error, i, k;
