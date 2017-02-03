@@ -617,7 +617,7 @@ _dhd_pno_get_channels(dhd_pub_t *dhd, uint16 *d_chan_list,
 {
 	int err = BCME_OK;
 	int i, j;
-	uint32 chan_buf[WL_NUMCHANNELS + 1];
+	uint32 chan_buf[WL_NUMCHANNELS];
 	wl_uint32_list_t *list;
 	NULL_CHECK(dhd, "dhd is NULL", err);
 	if (*nchan) {

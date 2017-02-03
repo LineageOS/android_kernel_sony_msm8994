@@ -87,6 +87,10 @@
 #define RX_DMA_OFFSET		8
 #define IOCT_RETBUF_SIZE	(RX_DMA_OFFSET + WLC_IOCTL_MAXLEN)
 
+/* flags for ioctl pending status */
+#define MSGBUF_IOCTL_ACK_PENDING        (1<<0)
+#define MSGBUF_IOCTL_RESP_PENDING       (1<<1)
+
 #define DMA_D2H_SCRATCH_BUF_LEN	8
 #define DMA_ALIGN_LEN		4
 #define DMA_XFER_LEN_LIMIT	0x400000
@@ -2681,6 +2685,8 @@ static void
 dhd_prot_ioctack_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 {
 	ioctl_req_ack_msg_t * ioct_ack = (ioctl_req_ack_msg_t *)buf;
+	unsigned long flags;
+
 #if defined(DHD_PKTID_AUDIT_RING)
 	uint32 pktid;
 	pktid = ltoh32(ioct_ack->cmn_hdr.request_id);
@@ -2689,6 +2695,17 @@ dhd_prot_ioctack_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 			DHD_TEST_IS_ALLOC);
 	}
 #endif /* DHD_PKTID_AUDIT_RING */
+	DHD_GENERAL_LOCK(dhd, flags);
+	if ((dhd->ioctl_state & MSGBUF_IOCTL_ACK_PENDING) &&
+		(dhd->ioctl_state & MSGBUF_IOCTL_RESP_PENDING)) {
+		dhd->ioctl_state &= ~MSGBUF_IOCTL_ACK_PENDING;
+	} else {
+		DHD_ERROR(("%s: received ioctl ACK with state %02x trans_id = %d\n",
+			__FUNCTION__, dhd->ioctl_state, dhd->prot->ioctl_trans_id));
+		prhex("dhd_prot_ioctack_process:",
+			(uchar *)buf, D2HRING_CTRL_CMPLT_ITEMSIZE);
+	}
+	DHD_GENERAL_UNLOCK(dhd, flags);
 
 	DHD_CTL(("ioctl req ack: request_id %d, status 0x%04x, flow ring %d \n",
 		ioct_ack->cmn_hdr.request_id, ioct_ack->compl_hdr.status,
@@ -2709,6 +2726,7 @@ dhd_prot_ioctcmplt_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 	uint32 resp_len = 0;
 	uint32 pkt_id, xt_id;
 	ioctl_comp_resp_msg_t * ioct_resp = (ioctl_comp_resp_msg_t *)buf;
+	unsigned long flags;
 
 	resp_len = ltoh16(ioct_resp->resp_len);
 	xt_id = ltoh16(ioct_resp->trans_id);
@@ -2725,6 +2743,18 @@ dhd_prot_ioctcmplt_process(dhd_pub_t *dhd, void * buf, uint16 msglen)
 	DHD_PKTID_AUDIT(dhd->prot->pktid_map_handle, pkt_id,
 		DHD_TEST_IS_ALLOC);
 #endif /* DHD_PKTID_AUDIT_RING */
+
+	DHD_GENERAL_LOCK(dhd, flags);
+	if ((dhd->ioctl_state & MSGBUF_IOCTL_ACK_PENDING) ||
+		!(dhd->ioctl_state & MSGBUF_IOCTL_RESP_PENDING)) {
+		DHD_ERROR(("%s: received ioctl response with state %02x trans_id = %d\n",
+			__FUNCTION__, dhd->ioctl_state, dhd->prot->ioctl_trans_id));
+		prhex("dhd_prot_ioctcmplt_process:",
+			(uchar *)buf, D2HRING_CTRL_CMPLT_ITEMSIZE);
+		DHD_GENERAL_UNLOCK(dhd, flags);
+		return;
+	}
+	DHD_GENERAL_UNLOCK(dhd, flags);
 
 	DHD_CTL(("IOCTL_COMPLETE: pktid %x xtid %d status %x resplen %d\n",
 		pkt_id, xt_id, status, resp_len));
@@ -3584,11 +3614,13 @@ dhdmsgbuf_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len, void* buf, void* retbuf)
 	unsigned long flags;
 	bool zero_posted = FALSE;
 	uint32 pktid;
+	int ret = 0;
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 	if (dhd->busstate == DHD_BUS_DOWN) {
 		DHD_ERROR(("%s: bus is already down.\n", __FUNCTION__));
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	if (prot->cur_ioctlresp_bufs_posted)
@@ -3598,7 +3630,8 @@ dhdmsgbuf_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len, void* buf, void* retbuf)
 
 	post_cnt = dhd_msgbuf_rxbuf_post_ioctlresp_bufs(dhd);
 	if (zero_posted && (post_cnt <= 0)) {
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	memset(&ioct_resp, 0, sizeof(ioctl_comp_resp_msg_t));
@@ -3606,7 +3639,8 @@ dhdmsgbuf_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len, void* buf, void* retbuf)
 	retlen = dhd_bus_rxctl(dhd->bus, (uchar*)&ioct_resp, msgbuf_len);
 	if (retlen <= 0) {
 		DHD_ERROR(("IOCTL request failed with error code %d\n", retlen));
-		return retlen;
+		ret = retlen;
+		goto out;
 	}
 
 	pktid = ioct_resp.cmn_hdr.request_id; /* no need for ltoh32 */
@@ -3643,7 +3677,14 @@ dhdmsgbuf_cmplt(dhd_pub_t *dhd, uint32 id, uint32 len, void* buf, void* retbuf)
 		DHD_GENERAL_UNLOCK(dhd, flags);
 	}
 
-	return (int)(ioct_resp.compl_hdr.status);
+	ret = (int)(ioct_resp.compl_hdr.status);
+
+out:
+	DHD_GENERAL_LOCK(dhd, flags);
+	dhd->ioctl_state = 0;
+	DHD_GENERAL_UNLOCK(dhd, flags);
+
+	return ret;
 }
 static int
 dhd_msgbuf_set_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len, uint8 action)
@@ -3815,10 +3856,20 @@ dhd_fillup_ioct_reqst_ptrbased(dhd_pub_t *dhd, uint16 len, uint cmd, void* buf, 
 	rqstlen = MIN(rqstlen, MSGBUF_MAX_MSG_SIZE);
 
 	DHD_GENERAL_LOCK(dhd, flags);
+
+	if (dhd->ioctl_state) {
+		DHD_ERROR(("%s: pending ioctl %02x\n", __FUNCTION__, dhd->ioctl_state));
+		DHD_GENERAL_UNLOCK(dhd, flags);
+		return BCME_BUSY;
+	} else {
+		dhd->ioctl_state = MSGBUF_IOCTL_ACK_PENDING | MSGBUF_IOCTL_RESP_PENDING;
+	}
+
 	/* Request for cbuf space */
 	ioct_rqst = (ioctl_req_msg_t*)dhd_alloc_ring_space(dhd, prot->h2dring_ctrl_subn,
 		DHD_FLOWRING_DEFAULT_NITEMS_POSTED_H2D,	&alloced);
 	if (ioct_rqst == NULL) {
+		dhd->ioctl_state = 0;
 		DHD_ERROR(("couldn't allocate space on msgring to send ioctl request\n"));
 		DHD_GENERAL_UNLOCK(dhd, flags);
 		return -1;

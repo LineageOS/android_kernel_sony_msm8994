@@ -2234,7 +2234,7 @@ wl_run_escan(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	u32 n_ssids;
 	s32 params_size = (WL_SCAN_PARAMS_FIXED_SIZE + OFFSETOF(wl_escan_params_t, params));
 	wl_escan_params_t *params = NULL;
-	u8 chan_buf[sizeof(u32)*(WL_NUMCHANNELS + 1)];
+	u8 chan_buf[sizeof(u32)*(WL_NUMCHANNELS)];
 	u32 num_chans = 0;
 	s32 channel;
 	s32 n_valid_chan;

@@ -23,7 +23,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_linux.c 642286 2016-06-08 05:57:20Z $
+ * $Id: dhd_linux.c 658465 2016-09-08 03:10:26Z $
  */
 
 #include <typedefs.h>
@@ -4188,6 +4188,7 @@ exit:
 #endif /* BCMPCIE */
 
 	dhd->pub.hang_was_sent = 0;
+	dhd->pub.ioctl_state = 0;
 
 	/* Clear country spec for for built-in type driver */
 	if (!dhd_download_fw_on_driverload) {
@@ -4263,6 +4264,7 @@ dhd_open(struct net_device *net)
 	DHD_PERIM_LOCK(&dhd->pub);
 	dhd->pub.dongle_trap_occured = 0;
 	dhd->pub.hang_was_sent = 0;
+	dhd->pub.ioctl_state = 0;
 
 #if !defined(WL_CFG80211)
 	/*
@@ -7101,12 +7103,14 @@ void dhd_detach(dhd_pub_t *dhdp)
 		dhd->new_freq = NULL;
 		cpufreq_unregister_notifier(&dhd->freq_trans, CPUFREQ_TRANSITION_NOTIFIER);
 #endif
-	if (dhd->dhd_state & DHD_ATTACH_STATE_WAKELOCKS_INIT) {
-		DHD_TRACE(("wd wakelock count:%d\n", dhd->wakelock_wd_counter));
-		dhd->wakelock_wd_counter = 0;
+
+	DHD_TRACE(("wd wakelock count:%d\n", dhd->wakelock_wd_counter));
+	dhd->wakelock_wd_counter = 0;
 #ifdef CONFIG_HAS_WAKELOCK
-		wake_lock_destroy(&dhd->wl_wdwake);
+	wake_lock_destroy(&dhd->wl_wdwake);
 #endif /* CONFIG_HAS_WAKELOCK */
+
+	if (dhd->dhd_state & DHD_ATTACH_STATE_WAKELOCKS_INIT) {
 		DHD_OS_WAKE_LOCK_DESTROY(dhd);
 	}
 

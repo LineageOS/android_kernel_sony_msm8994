@@ -113,8 +113,10 @@ static void dhdpcie_bus_wtcm16(dhd_bus_t *bus, ulong offset, uint16 data);
 static uint16 dhdpcie_bus_rtcm16(dhd_bus_t *bus, ulong offset);
 static void dhdpcie_bus_wtcm32(dhd_bus_t *bus, ulong offset, uint32 data);
 static uint32 dhdpcie_bus_rtcm32(dhd_bus_t *bus, ulong offset);
+#ifdef DHD_SUPPORT_64BIT
 static void dhdpcie_bus_wtcm64(dhd_bus_t *bus, ulong offset, uint64 data);
 static uint64 dhdpcie_bus_rtcm64(dhd_bus_t *bus, ulong offset);
+#endif /* DHD_SUPPORT_64BIT */
 static void dhdpcie_bus_cfg_set_bar0_win(dhd_bus_t *bus, uint32 data);
 #ifdef CONFIG_ARCH_MSM8994
 static void dhdpcie_bus_cfg_set_bar1_win(dhd_bus_t *bus, uint32 data);
@@ -752,11 +754,8 @@ dhdpcie_bus_release(dhd_bus_t *bus)
 		MFREE(osh, bus, sizeof(dhd_bus_t));
 
 	}
-
 	DHD_TRACE(("%s: Exit\n", __FUNCTION__));
-
 }
-
 
 void
 dhdpcie_bus_release_dongle(dhd_bus_t *bus, osl_t *osh, bool dongle_isolation, bool reset_flag)
@@ -914,6 +913,12 @@ bool dhd_bus_watchdog(dhd_pub_t *dhd)
 
 	if ((bus->idletime > 0) && (bus->idlecount >= bus->idletime)) {
 		bus->idlecount = 0;
+		if (dhd->ioctl_state) {
+			DHD_ERROR(("%s: ioctl is pending defer RPM, ioctl_state=0x%x\n",
+				__FUNCTION__, dhd->ioctl_state));
+			return FALSE;
+		}
+
 		bus->host_suspend = TRUE;
 		bus->bus_wake = 0;
 
@@ -1956,12 +1961,17 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 	 */
 
 	/* Determine initial transfer parameters */
+#ifdef DHD_SUPPORT_64BIT
 	dsize = sizeof(uint64);
+#else /* !DHD_SUPPORT_64BIT */
+	dsize = sizeof(uint32);
+#endif /* DHD_SUPPORT_64BIT */
 
 	/* Do the transfer(s) */
 	if (write) {
 		while (size) {
-			if (size >= sizeof(uint64) && little_endian) {
+#ifdef DHD_SUPPORT_64BIT
+			if (size >= sizeof(uint64) && little_endian &&	!(address % 8)) {
 #ifdef CONFIG_ARCH_MSM8994
 				if (is_64bit_unaligned) {
 					DHD_INFO(("%s: write unaligned %lx\n",
@@ -1976,7 +1986,13 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 				else
 #endif
 				dhdpcie_bus_wtcm64(bus, address, *((uint64 *)data));
-			} else {
+			}
+#else /* !DHD_SUPPORT_64BIT */
+			if (size >= sizeof(uint32) && little_endian &&	!(address % 4)) {
+				dhdpcie_bus_wtcm32(bus, address, *((uint32*)data));
+			}
+#endif /* DHD_SUPPORT_64BIT */
+			else {
 				dsize = sizeof(uint8);
 				dhdpcie_bus_wtcm8(bus, address, *data);
 			}
@@ -1989,7 +2005,9 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 		}
 	} else {
 		while (size) {
-			if (size >= sizeof(uint64) && little_endian) {
+#ifdef DHD_SUPPORT_64BIT
+			if (size >= sizeof(uint64) && little_endian &&	!(address % 8))
+			{
 #ifdef CONFIG_ARCH_MSM8994
 				if (is_64bit_unaligned) {
 					DHD_INFO(("%s: read unaligned %lx\n",
@@ -2004,7 +2022,14 @@ dhdpcie_bus_membytes(dhd_bus_t *bus, bool write, ulong address, uint8 *data, uin
 				else
 #endif
 				*(uint64 *)data = dhdpcie_bus_rtcm64(bus, address);
-			} else {
+			}
+#else /* !DHD_SUPPORT_64BIT */
+			if (size >= sizeof(uint32) && little_endian &&	!(address % 4))
+			{
+				*(uint32 *)data = dhdpcie_bus_rtcm32(bus, address);
+			}
+#endif /* DHD_SUPPORT_64BIT */
+			else {
 				dsize = sizeof(uint8);
 				*data = dhdpcie_bus_rtcm8(bus, address);
 			}
@@ -2343,38 +2368,42 @@ static ulong dhd_bus_cmn_check_offset(dhd_bus_t *bus, ulong offset)
 void
 dhdpcie_bus_wtcm8(dhd_bus_t *bus, ulong offset, uint8 data)
 {
-	*(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)) = (uint8)data;
+	W_REG(bus->dhd->osh,(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 
 uint8
 dhdpcie_bus_rtcm8(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint8 data;
-	data = *(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset));
+
+	data = R_REG(bus->dhd->osh,(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
+
 	return data;
 }
 
 void
 dhdpcie_bus_wtcm32(dhd_bus_t *bus, ulong offset, uint32 data)
 {
-	*(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)) = (uint32)data;
+	W_REG(bus->dhd->osh,(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 void
 dhdpcie_bus_wtcm16(dhd_bus_t *bus, ulong offset, uint16 data)
 {
-	*(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)) = (uint16)data;
+	W_REG(bus->dhd->osh,(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
+#ifdef DHD_SUPPORT_64BIT
 void
 dhdpcie_bus_wtcm64(dhd_bus_t *bus, ulong offset, uint64 data)
 {
-	*(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)) = (uint64)data;
+	W_REG(bus->dhd->osh,(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
+#endif /*  DHD_SUPPORT_64BIT */
 
 uint16
 dhdpcie_bus_rtcm16(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint16 data;
-	data = *(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset));
+	data = R_REG(bus->dhd->osh,(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
 
@@ -2382,17 +2411,18 @@ uint32
 dhdpcie_bus_rtcm32(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint32 data;
-	data = *(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset));
+	data = R_REG(bus->dhd->osh,(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
-
+#ifdef DHD_SUPPORT_64BIT
 uint64
 dhdpcie_bus_rtcm64(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint64 data;
-	data = *(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset));
+	data = R_REG(bus->dhd->osh,(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
+#endif /* DHD_SUPPORT_64BIT */
 
 void
 dhd_bus_cmn_writeshared(dhd_bus_t *bus, void * data, uint32 len, uint8 type, uint16 ringid)
