@@ -40,6 +40,7 @@
 			vdd_ana-supply  = <&pm8994_l32>;
 			vdd_io-supply   = <&pm8994_l32>;
 			fpc,use_fpc2050 = <1>;
+			fpc,enable-wakeup = <1>;
 
 			spi-max-frequency = <4800000>;
 			spi-qup-id = <1>;
