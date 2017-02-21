@@ -995,8 +995,8 @@
 };
 
 &sdhc_2 {
-	interrupt-map-mask = <0x3>;
-	cd-gpios = <&msm_gpio 100 0x0>;
+	qcom,nonremovable;
+	/delete-property/ cd-gpios;
 	qcom,clk-rates = <400000 20000000 25000000 40000000 50000000 80000000
 				100000000 200000000>;
 	qcom,msm-bus,num-cases = <10>;
