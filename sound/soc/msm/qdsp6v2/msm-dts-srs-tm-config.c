@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, 2017 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,7 +19,6 @@
 #include <sound/control.h>
 #include <sound/q6adm-v2.h>
 #include <sound/asound.h>
-#include <sound/msm-dts-eagle.h>
 #include "msm-dts-srs-tm-config.h"
 #include "msm-pcm-routing-v2.h"
 
