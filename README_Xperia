@@ -49,7 +49,7 @@ How to build your kernel:
 
     $ make
 
-    You can see arch/arm64/boot/Image-dtb if you succeed in building.
+    You can see arch/arm64/boot/Image.gz-dtb if you succeed in building.
 
 
   Step 2: Assembling the boot.img
