@@ -1,7 +1,7 @@
 /*
  * Linux OS Independent Layer
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -297,7 +297,7 @@ extern int osl_error(int bcmerror);
 #ifdef CONFIG_64BIT
 /* writeq is defined only for 64 bit platform */
 #define W_REG(osh, r, v) do { \
-		SELECT_BUS_WRITE(osh, \
+	SELECT_BUS_WRITE(osh, \
 		switch (sizeof(*(r))) { \
 			case sizeof(uint8):	writeb((uint8)(v), (volatile uint8*)(r)); break; \
 			case sizeof(uint16):	writew((uint16)(v), (volatile uint16*)(r)); break; \

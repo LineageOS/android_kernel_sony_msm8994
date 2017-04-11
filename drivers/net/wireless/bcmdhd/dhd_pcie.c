@@ -1,7 +1,7 @@
 /*
  * DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * Copyright (C) 2014 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_pcie.c 633622 2016-04-24 11:50:51Z $
+ * $Id: dhd_pcie.c 680504 2017-01-20 06:13:53Z $
  */
 
 
@@ -153,12 +153,6 @@ enum {
 	IOV_SLEEP_ALLOWED,
 	IOV_PCIE_DMAXFER,
 	IOV_PCIE_SUSPEND,
-	IOV_PCIEREG,
-	IOV_PCIECFGREG,
-	IOV_PCIECOREREG,
-	IOV_PCIESERDESREG,
-	IOV_BAR0_SECWIN_REG,
-	IOV_SBREG,
 	IOV_DONGLEISOLATION,
 	IOV_LTRSLEEPON_UNLOOAD,
 	IOV_RX_METADATALEN,
@@ -188,12 +182,6 @@ const bcm_iovar_t dhdpcie_iovars[] = {
 	{"cc_nvmshadow", IOV_CC_NVMSHADOW, 0, IOVT_BUFFER, 0 },
 	{"ramsize",	IOV_RAMSIZE,	0,	IOVT_UINT32,	0 },
 	{"ramstart",	IOV_RAMSTART,	0,	IOVT_UINT32,	0 },
-	{"pciereg",	IOV_PCIEREG,	0,	IOVT_BUFFER,	2 * sizeof(int32) },
-	{"pciecfgreg",	IOV_PCIECFGREG,	0,	IOVT_BUFFER,	2 * sizeof(int32) },
-	{"pciecorereg",	IOV_PCIECOREREG,	0,	IOVT_BUFFER,	2 * sizeof(int32) },
-	{"pcieserdesreg",	IOV_PCIESERDESREG,	0,	IOVT_BUFFER,	3 * sizeof(int32) },
-	{"bar0secwinreg",	IOV_BAR0_SECWIN_REG,	0,	IOVT_BUFFER,	2 * sizeof(int32) },
-	{"sbreg",	IOV_SBREG,	0,	IOVT_BUFFER,	sizeof(sdreg_t) },
 	{"pcie_dmaxfer",	IOV_PCIE_DMAXFER,	0,	IOVT_BUFFER,	3 * sizeof(int32) },
 	{"pcie_suspend", IOV_PCIE_SUSPEND,	0,	IOVT_UINT32,	0 },
 	{"sleep_allowed",	IOV_SLEEP_ALLOWED,	0,	IOVT_BOOL,	0 },
@@ -754,8 +742,11 @@ dhdpcie_bus_release(dhd_bus_t *bus)
 		MFREE(osh, bus, sizeof(dhd_bus_t));
 
 	}
+
 	DHD_TRACE(("%s: Exit\n", __FUNCTION__));
+
 }
+
 
 void
 dhdpcie_bus_release_dongle(dhd_bus_t *bus, osl_t *osh, bool dongle_isolation, bool reset_flag)
@@ -913,12 +904,6 @@ bool dhd_bus_watchdog(dhd_pub_t *dhd)
 
 	if ((bus->idletime > 0) && (bus->idlecount >= bus->idletime)) {
 		bus->idlecount = 0;
-		if (dhd->ioctl_state) {
-			DHD_ERROR(("%s: ioctl is pending defer RPM, ioctl_state=0x%x\n",
-				__FUNCTION__, dhd->ioctl_state));
-			return FALSE;
-		}
-
 		bus->host_suspend = TRUE;
 		bus->bus_wake = 0;
 
@@ -940,6 +925,7 @@ bool dhd_bus_watchdog(dhd_pub_t *dhd)
 		wait_event_interruptible(bus->rpm_queue, bus->bus_wake);
 		dhdpcie_set_suspend_resume(bus->dev, FALSE);
 		atomic_set(&bus->runtime_suspend, 0);
+		smp_wmb();
 		wake_up_interruptible(&bus->rpm_queue);
 		DHD_ERROR(("%s: Runtime resume ended.\n", __FUNCTION__));
 	}
@@ -2368,7 +2354,8 @@ static ulong dhd_bus_cmn_check_offset(dhd_bus_t *bus, ulong offset)
 void
 dhdpcie_bus_wtcm8(dhd_bus_t *bus, ulong offset, uint8 data)
 {
-	W_REG(bus->dhd->osh,(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
+	W_REG(bus->dhd->osh,
+		(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 
 uint8
@@ -2376,7 +2363,8 @@ dhdpcie_bus_rtcm8(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint8 data;
 
-	data = R_REG(bus->dhd->osh,(volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
+	data = R_REG(bus->dhd->osh,
+	    (volatile uint8 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 
 	return data;
 }
@@ -2384,18 +2372,21 @@ dhdpcie_bus_rtcm8(dhd_bus_t *bus, ulong offset)
 void
 dhdpcie_bus_wtcm32(dhd_bus_t *bus, ulong offset, uint32 data)
 {
-	W_REG(bus->dhd->osh,(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
+	W_REG(bus->dhd->osh,
+		(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 void
 dhdpcie_bus_wtcm16(dhd_bus_t *bus, ulong offset, uint16 data)
 {
-	W_REG(bus->dhd->osh,(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
+	W_REG(bus->dhd->osh,
+		(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 #ifdef DHD_SUPPORT_64BIT
 void
 dhdpcie_bus_wtcm64(dhd_bus_t *bus, ulong offset, uint64 data)
 {
-	W_REG(bus->dhd->osh,(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
+	W_REG(bus->dhd->osh,
+		(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)), data);
 }
 #endif /*  DHD_SUPPORT_64BIT */
 
@@ -2403,7 +2394,8 @@ uint16
 dhdpcie_bus_rtcm16(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint16 data;
-	data = R_REG(bus->dhd->osh,(volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
+	data = R_REG(bus->dhd->osh,
+	    (volatile uint16 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
 
@@ -2411,7 +2403,8 @@ uint32
 dhdpcie_bus_rtcm32(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint32 data;
-	data = R_REG(bus->dhd->osh,(volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
+	data = R_REG(bus->dhd->osh,
+	    (volatile uint32 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
 #ifdef DHD_SUPPORT_64BIT
@@ -2419,7 +2412,8 @@ uint64
 dhdpcie_bus_rtcm64(dhd_bus_t *bus, ulong offset)
 {
 	volatile uint64 data;
-	data = R_REG(bus->dhd->osh,(volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
+	data = R_REG(bus->dhd->osh,
+	    (volatile uint64 *)(bus->tcm + dhd_bus_cmn_check_offset(bus, offset)));
 	return data;
 }
 #endif /* DHD_SUPPORT_64BIT */
@@ -2903,85 +2897,6 @@ done:
 #define PCIE_GEN2(sih) ((BUSTYPE((sih)->bustype) == PCI_BUS) &&	\
 	((sih)->buscoretype == PCIE2_CORE_ID))
 
-static bool
-pcie2_mdiosetblock(dhd_bus_t *bus, uint blk)
-{
-	uint mdiodata, mdioctrl, i = 0;
-	uint pcie_serdes_spinwait = 200;
-
-	mdioctrl = MDIOCTL2_DIVISOR_VAL | (0x1F << MDIOCTL2_REGADDR_SHF);
-	mdiodata = (blk << MDIODATA2_DEVADDR_SHF) | MDIODATA2_DONE;
-
-	si_corereg(bus->sih, bus->sih->buscoreidx, PCIE2_MDIO_CONTROL, ~0, mdioctrl);
-	si_corereg(bus->sih, bus->sih->buscoreidx, PCIE2_MDIO_WR_DATA, ~0, mdiodata);
-
-	OSL_DELAY(10);
-	/* retry till the transaction is complete */
-	while (i < pcie_serdes_spinwait) {
-		uint mdioctrl_read = si_corereg(bus->sih, bus->sih->buscoreidx, PCIE2_MDIO_WR_DATA,
-			0, 0);
-		if (!(mdioctrl_read & MDIODATA2_DONE)) {
-			break;
-		}
-		OSL_DELAY(1000);
-		i++;
-	}
-
-	if (i >= pcie_serdes_spinwait) {
-		DHD_ERROR(("pcie_mdiosetblock: timed out\n"));
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
-static int
-pcie2_mdioop(dhd_bus_t *bus, uint physmedia, uint regaddr, bool write, uint *val,
-	bool slave_bypass)
-{
-	uint pcie_serdes_spinwait = 200, i = 0, mdio_ctrl;
-	uint32 reg32;
-
-	pcie2_mdiosetblock(bus, physmedia);
-
-	/* enable mdio access to SERDES */
-	mdio_ctrl = MDIOCTL2_DIVISOR_VAL;
-	mdio_ctrl |= (regaddr << MDIOCTL2_REGADDR_SHF);
-
-	if (slave_bypass)
-		mdio_ctrl |= MDIOCTL2_SLAVE_BYPASS;
-
-	if (!write)
-		mdio_ctrl |= MDIOCTL2_READ;
-
-	si_corereg(bus->sih, bus->sih->buscoreidx, PCIE2_MDIO_CONTROL, ~0, mdio_ctrl);
-
-	if (write) {
-		reg32 =  PCIE2_MDIO_WR_DATA;
-		si_corereg(bus->sih, bus->sih->buscoreidx, PCIE2_MDIO_WR_DATA, ~0,
-			*val | MDIODATA2_DONE);
-	}
-	else
-		reg32 =  PCIE2_MDIO_RD_DATA;
-
-	/* retry till the transaction is complete */
-	while (i < pcie_serdes_spinwait) {
-		uint done_val =  si_corereg(bus->sih, bus->sih->buscoreidx, reg32, 0, 0);
-		if (!(done_val & MDIODATA2_DONE)) {
-			if (!write) {
-				*val = si_corereg(bus->sih, bus->sih->buscoreidx,
-					PCIE2_MDIO_RD_DATA, 0, 0);
-				*val = *val & MDIODATA2_MASK;
-			}
-			return 0;
-		}
-		OSL_DELAY(1000);
-		i++;
-	}
-	return -1;
-}
-
 int
 dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 {
@@ -3201,131 +3116,6 @@ dhdpcie_bus_doiovar(dhd_bus_t *bus, const bcm_iovar_t *vi, uint32 actionid, cons
 
 	case IOV_SVAL(IOV_VARS):
 		bcmerror = dhdpcie_downloadvars(bus, arg, len);
-		break;
-
-	case IOV_SVAL(IOV_PCIEREG):
-		si_corereg(bus->sih, bus->sih->buscoreidx, OFFSETOF(sbpcieregs_t, configaddr), ~0,
-			int_val);
-		si_corereg(bus->sih, bus->sih->buscoreidx, OFFSETOF(sbpcieregs_t, configdata), ~0,
-			int_val2);
-		break;
-
-	case IOV_GVAL(IOV_PCIEREG):
-		si_corereg(bus->sih, bus->sih->buscoreidx, OFFSETOF(sbpcieregs_t, configaddr), ~0,
-			int_val);
-		int_val = si_corereg(bus->sih, bus->sih->buscoreidx,
-			OFFSETOF(sbpcieregs_t, configdata), 0, 0);
-		bcopy(&int_val, arg, sizeof(int_val));
-		break;
-
-	case IOV_GVAL(IOV_BAR0_SECWIN_REG):
-	{
-		uint32 cur_base, base;
-		uchar *bar0;
-		volatile uint32 *offset;
-		/* set the bar0 secondary window to this */
-		/* write the register value */
-		cur_base = dhdpcie_bus_cfg_read_dword(bus, PCIE2_BAR0_CORE2_WIN, sizeof(uint));
-		base = int_val & 0xFFFFF000;
-		dhdpcie_bus_cfg_write_dword(bus, PCIE2_BAR0_CORE2_WIN,  sizeof(uint32), base);
-		bar0 = (uchar *)bus->regs;
-		offset = (uint32 *)(bar0 + 0x4000 + (int_val & 0xFFF));
-		int_val = *offset;
-		bcopy(&int_val, arg, val_size);
-		dhdpcie_bus_cfg_write_dword(bus, PCIE2_BAR0_CORE2_WIN, sizeof(uint32), cur_base);
-	}
-		break;
-	case IOV_SVAL(IOV_BAR0_SECWIN_REG):
-	{
-		uint32 cur_base, base;
-		uchar *bar0;
-		volatile uint32 *offset;
-		/* set the bar0 secondary window to this */
-		/* write the register value */
-		cur_base = dhdpcie_bus_cfg_read_dword(bus, PCIE2_BAR0_CORE2_WIN, sizeof(uint));
-		base = int_val & 0xFFFFF000;
-		dhdpcie_bus_cfg_write_dword(bus, PCIE2_BAR0_CORE2_WIN,  sizeof(uint32), base);
-		bar0 = (uchar *)bus->regs;
-		offset = (uint32 *)(bar0 + 0x4000 + (int_val & 0xFFF));
-		*offset = int_val2;
-		bcopy(&int_val2, arg, val_size);
-		dhdpcie_bus_cfg_write_dword(bus, PCIE2_BAR0_CORE2_WIN, sizeof(uint32), cur_base);
-	}
-		break;
-
-	case IOV_SVAL(IOV_PCIECOREREG):
-		si_corereg(bus->sih, bus->sih->buscoreidx, int_val, ~0, int_val2);
-		break;
-	case IOV_GVAL(IOV_SBREG):
-	{
-		sdreg_t sdreg;
-		uint32 addr, coreidx;
-
-		bcopy(params, &sdreg, sizeof(sdreg));
-
-		addr = sdreg.offset;
-		coreidx =  (addr & 0xF000) >> 12;
-
-		int_val = si_corereg(bus->sih, coreidx, (addr & 0xFFF), 0, 0);
-		bcopy(&int_val, arg, sizeof(int32));
-		break;
-	}
-
-	case IOV_SVAL(IOV_SBREG):
-	{
-		sdreg_t sdreg;
-		uint32 addr, coreidx;
-
-		bcopy(params, &sdreg, sizeof(sdreg));
-
-		addr = sdreg.offset;
-		coreidx =  (addr & 0xF000) >> 12;
-
-		si_corereg(bus->sih, coreidx, (addr & 0xFFF), ~0, sdreg.value);
-
-		break;
-	}
-
-	case IOV_GVAL(IOV_PCIESERDESREG):
-	{
-		uint val;
-		if (!PCIE_GEN2(bus->sih)) {
-			DHD_ERROR(("supported only in pcie gen2\n"));
-			bcmerror = BCME_ERROR;
-			break;
-		}
-		if (!pcie2_mdioop(bus, int_val, int_val2, FALSE, &val, FALSE)) {
-			bcopy(&val, arg, sizeof(int32));
-		}
-		else {
-			DHD_ERROR(("pcie2_mdioop failed.\n"));
-			bcmerror = BCME_ERROR;
-		}
-		break;
-	}
-	case IOV_SVAL(IOV_PCIESERDESREG):
-		if (!PCIE_GEN2(bus->sih)) {
-			DHD_ERROR(("supported only in pcie gen2\n"));
-			bcmerror = BCME_ERROR;
-			break;
-		}
-		if (pcie2_mdioop(bus, int_val, int_val2, TRUE, &int_val3, FALSE)) {
-			DHD_ERROR(("pcie2_mdioop failed.\n"));
-			bcmerror = BCME_ERROR;
-		}
-		break;
-	case IOV_GVAL(IOV_PCIECOREREG):
-		int_val = si_corereg(bus->sih, bus->sih->buscoreidx, int_val, 0, 0);
-		bcopy(&int_val, arg, sizeof(int_val));
-		break;
-
-	case IOV_SVAL(IOV_PCIECFGREG):
-		OSL_PCI_WRITE_CONFIG(bus->osh, int_val, 4, int_val2);
-		break;
-
-	case IOV_GVAL(IOV_PCIECFGREG):
-		int_val = OSL_PCI_READ_CONFIG(bus->osh, int_val, 4);
-		bcopy(&int_val, arg, sizeof(int_val));
 		break;
 
 	case IOV_SVAL(IOV_PCIE_LPBK):
@@ -5398,6 +5188,7 @@ bool bus_wake(dhd_bus_t *bus)
 
 	if (bus->suspended && bus->host_suspend) {
 		bus->bus_wake = 1;
+		smp_wmb();
 		wake_up_interruptible(&bus->rpm_queue);
 		SMP_RD_BARRIER_DEPENDS();
 		while (atomic_read(&bus->runtime_suspend) && retry++ != MAX_RESUME_WAIT) {
@@ -5429,6 +5220,7 @@ bool bus_wakeup(dhd_bus_t *bus)
 	SMP_RD_BARRIER_DEPENDS();
 	if (bus->suspended && bus->host_suspend) {
 		bus->bus_wake = 1;
+		smp_wmb();
 		wake_up_interruptible(&bus->rpm_queue);
 		SMP_RD_BARRIER_DEPENDS();
 		return TRUE;

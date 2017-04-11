@@ -4,7 +4,7 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * Copyright (C) 2014 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -25,7 +25,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd.h 642286 2016-06-08 05:57:20Z $
+ * $Id: dhd.h 676009 2016-12-20 02:54:41Z $
  */
 
 /****************
@@ -543,6 +543,8 @@ extern int dhd_os_wd_wake_lock(dhd_pub_t *pub);
 extern int dhd_os_wd_wake_unlock(dhd_pub_t *pub);
 extern int dhd_event_wake_lock(dhd_pub_t *pub);
 extern int dhd_event_wake_unlock(dhd_pub_t *pub);
+extern void dhd_txfl_wake_lock_timeout(dhd_pub_t *pub, int val);
+extern void dhd_txfl_wake_unlock(dhd_pub_t *pub);
 
 #ifdef BCMPCIE_OOB_HOST_WAKE
 extern int dhd_os_oob_irq_wake_lock_timeout(dhd_pub_t *pub, int val);
@@ -594,6 +596,18 @@ inline static void MUTEX_UNLOCK_SOFTAP_SET(dhd_pub_t * dhdp)
 		printf("call event wake_unlock: %s %d\n", \
 			__FUNCTION__, __LINE__); \
 		dhd_event_wake_unlock(pub); \
+	} while (0)
+#define DHD_TXFL_WAKE_LOCK_TIMEOUT(pub, val) \
+	do { \
+		printf("call txfl wake_lock_timeout[%d]: %s %d\n", \
+			val, __FUNCTION__, __LINE__); \
+		dhd_txfl_wake_lock_timeout(pub, val); \
+	} while (0)
+#define DHD_TXFL_WAKE_UNLOCK(pub) \
+	do { \
+		printf("call txfl wake_unlock: %s %d\n", \
+			__FUNCTION__, __LINE__); \
+		dhd_txfl_wake_unlock(pub); \
 	} while (0)
 #define DHD_OS_WAKE_LOCK_TIMEOUT(pub) \
 	do { \
@@ -648,6 +662,8 @@ inline static void MUTEX_UNLOCK_SOFTAP_SET(dhd_pub_t * dhdp)
 #define DHD_OS_WAKE_UNLOCK(pub)			dhd_os_wake_unlock(pub)
 #define DHD_EVENT_WAKE_LOCK(pub)		dhd_event_wake_lock(pub)
 #define DHD_EVENT_WAKE_UNLOCK(pub)		dhd_event_wake_unlock(pub)
+#define DHD_TXFL_WAKE_LOCK_TIMEOUT(pub, val)	dhd_txfl_wake_lock_timeout(pub, val)
+#define DHD_TXFL_WAKE_UNLOCK(pub)		dhd_txfl_wake_unlock(pub)
 #define DHD_OS_WAKE_LOCK_TIMEOUT(pub)		dhd_os_wake_lock_timeout(pub)
 #define DHD_OS_WAKE_LOCK_RX_TIMEOUT_ENABLE(pub, val) \
 	dhd_os_wake_lock_rx_timeout_enable(pub, val)
@@ -670,7 +686,7 @@ inline static void MUTEX_UNLOCK_SOFTAP_SET(dhd_pub_t * dhdp)
 #endif /* BCMPCIE_OOB_HOST_WAKE */
 #define DHD_PACKET_TIMEOUT_MS	500
 #define DHD_EVENT_TIMEOUT_MS	1500
-
+#define MAX_TX_TIMEOUT		500
 
 /* interface operations (register, remove) should be atomic, use this lock to prevent race
  * condition among wifi on/off and interface operation functions
