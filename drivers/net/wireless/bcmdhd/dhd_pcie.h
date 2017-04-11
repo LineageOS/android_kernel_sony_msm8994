@@ -1,7 +1,7 @@
 /*
  * Linux DHD Bus Module for PCIE
  *
- * Copyright (C) 1999-2016, Broadcom Corporation
+ * Copyright (C) 1999-2017, Broadcom Corporation
  * Copyright (C) 2015 Sony Mobile Communications Inc.
  * 
  *      Unless you and Broadcom execute a separate written software license
