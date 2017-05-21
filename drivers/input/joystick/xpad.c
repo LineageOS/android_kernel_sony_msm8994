@@ -74,11 +74,6 @@
  *
  * Later changes can be tracked in SCM.
  */
-/*
- * NOTE: This file has been modified by Sony Mobile Communications Inc.
- * Modifications are Copyright (c) 2012 Sony Mobile Communications Inc,
- * and licensed under the license of the file.
- */
 
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -330,12 +325,10 @@ struct usb_xpad {
 
 	int pad_present;
 
-	int interface_number;
-
 	struct urb *irq_in;		/* urb for interrupt in report */
 	unsigned char *idata;		/* input data */
 	dma_addr_t idata_dma;
-	struct work_struct submit_urb;	/* work queue for -EPIPE error */
+
 	struct urb *irq_out;		/* urb for interrupt out report */
 	unsigned char *odata;		/* output data */
 	dma_addr_t odata_dma;
@@ -436,14 +429,6 @@ static void xpad360_process_packet(struct usb_xpad *xpad,
 				   u16 cmd, unsigned char *data)
 {
 	struct input_dev *dev = xpad->dev;
-
-	/*
-	 * Xbox 360 wireless controller will send many key events at
-	 * the same time when pairing is done. Ignore them since they
-	 * are unnecessary input events.
-	 */
-	if (xpad->xtype == XTYPE_XBOX360W && data[1] == 0xcc)
-		return;
 
 	/* digital pad */
 	if (xpad->mapping & MAP_DPAD_TO_BUTTONS) {
@@ -666,10 +651,6 @@ static void xpad_irq_in(struct urb *urb)
 		/* this urb is terminated, clean up */
 		dev_dbg(dev, "%s - urb shutting down with status: %d\n",
 			__func__, status);
-		return;
-	case -EPIPE:
-	case -EPROTO:
-		schedule_work(&xpad->submit_urb);
 		return;
 	default:
 		dev_dbg(dev, "%s - nonzero urb status received: %d\n",
@@ -942,7 +923,6 @@ struct xpad_led {
 static void xpad_send_led_command(struct usb_xpad *xpad, int command)
 {
 	command %= 16;
-
 
 	mutex_lock(&xpad->odata_mutex);
 
@@ -1220,6 +1200,9 @@ static int xpad_probe(struct usb_interface *intf, const struct usb_device_id *id
 	struct usb_endpoint_descriptor *ep_irq_in;
 	int ep_irq_in_idx;
 	int i, error;
+
+	if (intf->cur_altsetting->desc.bNumEndpoints != 2)
+		return -ENODEV;
 
 	for (i = 0; xpad_device[i].idVendor; i++) {
 		if ((le16_to_cpu(udev->descriptor.idVendor) == xpad_device[i].idVendor) &&
