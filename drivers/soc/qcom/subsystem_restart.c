@@ -9,11 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-/*
- * NOTE: This file has been modified by Sony Mobile Communications Inc.
- * Modifications are Copyright (c) 2014 Sony Mobile Communications Inc,
- * and licensed under the license of the file.
- */
 
 #define pr_fmt(fmt) "subsys-restart: %s(): " fmt, __func__
 
@@ -35,8 +30,6 @@
 #include <linux/device.h>
 #include <linux/idr.h>
 #include <linux/interrupt.h>
-#include <linux/poll.h>
-#include <linux/wait.h>
 #include <linux/of_gpio.h>
 #include <linux/cdev.h>
 #include <linux/platform_device.h>
@@ -302,14 +295,6 @@ int subsys_get_restart_level(struct subsys_device *dev)
 	return dev->restart_level;
 }
 EXPORT_SYMBOL(subsys_get_restart_level);
-
-void subsys_set_restart_level(struct subsys_device *dev, int new_level)
-{
-	if (new_level == RESET_SOC || new_level == RESET_SUBSYS_COUPLED)
-		dev->restart_level = new_level;
-	else
-		pr_err("Incorrect restart level %d\n", new_level);
-}
 
 static void subsys_set_state(struct subsys_device *subsys,
 			     enum subsys_state state)
@@ -616,17 +601,10 @@ static void subsystem_powerup(struct subsys_device *dev, void *data)
 	init_completion(&dev->err_ready);
 
 	if (dev->desc->powerup(dev->desc) < 0) {
-		/* If a system shutdown or restart is underway, ignore errors. */
-		if ((system_state == SYSTEM_POWER_OFF) ||
-			(system_state == SYSTEM_RESTART)) {
-			pr_err("[%p]: Powerup error: %s!", current, name);
-			return;
-		} else {
-			notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
-									NULL);
-			panic("[%s:%d]: Powerup error: %s!",
-				current->comm, current->pid, name);
-		}
+		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
+								NULL);
+		panic("[%s:%d]: Powerup error: %s!",
+			current->comm, current->pid, name);
 	}
 	enable_all_irqs(dev);
 
@@ -1017,17 +995,6 @@ int subsystem_restart(const char *name)
 }
 EXPORT_SYMBOL(subsystem_restart);
 
-int subsystem_crash_reason(const char *name, char *msg)
-{
-	struct subsys_device *dev = find_subsys(name);
-
-	if (!dev)
-		return -ENODEV;
-	update_crash_reason(dev, msg, SUBSYS_CRASH_REASON_LEN);
-	return 0;
-}
-EXPORT_SYMBOL(subsystem_crash_reason);
-
 int subsystem_crashed(const char *name)
 {
 	struct subsys_device *dev = find_subsys(name);
@@ -1063,11 +1030,6 @@ void subsys_set_crash_status(struct subsys_device *dev, bool crashed)
 bool subsys_get_crash_status(struct subsys_device *dev)
 {
 	return dev->crashed;
-}
-
-bool subsys_is_ramdump_enabled(struct subsys_device *dev)
-{
-	return is_ramdump_enabled(dev);
 }
 
 static struct subsys_device *desc_to_subsys(struct device *d)
