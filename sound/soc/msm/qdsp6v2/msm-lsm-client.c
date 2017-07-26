@@ -817,7 +817,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 		}
 
 		size = sizeof(*user) + userarg32.payload_size;
-		user = kmalloc(size, GFP_KERNEL);
+		user = kzalloc(size, GFP_KERNEL);
 		if (!user) {
 			pr_err("%s: Allocation failed event status size %d\n",
 			__func__, size);
@@ -836,7 +836,7 @@ static int msm_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 			err = -EFAULT;
 		}
 		if (!err) {
-			user32 = kmalloc(size, GFP_KERNEL);
+			user32 = kzalloc(size, GFP_KERNEL);
 			if (!user32) {
 				pr_err("%s: Allocation event user status size %d\n"
 				, __func__, size);
@@ -1037,7 +1037,7 @@ static int msm_lsm_ioctl(struct snd_pcm_substream *substream,
 
 		size = sizeof(struct snd_lsm_event_status) +
 		userarg.payload_size;
-		user = kmalloc(size, GFP_KERNEL);
+		user = kzalloc(size, GFP_KERNEL);
 		if (!user) {
 			pr_err("%s: Allocation failed event status size %d\n",
 			__func__, size);
