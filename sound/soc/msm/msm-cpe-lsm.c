@@ -1186,8 +1186,10 @@ static int msm_cpe_lsm_ioctl(struct snd_pcm_substream *substream,
 	switch (cmd) {
 	case SNDRV_LSM_REG_SND_MODEL_V2: {
 		struct snd_lsm_sound_model_v2 snd_model;
+
 		if (copy_from_user(&snd_model, (void *)arg,
 				   sizeof(struct snd_lsm_sound_model_v2))) {
+
 			dev_err(rtd->dev,
 				"%s: copy from user failed, size %zd\n",
 				__func__,
@@ -1477,6 +1479,7 @@ static int msm_cpe_lsm_ioctl_compat(struct snd_pcm_substream *substream,
 	case SNDRV_LSM_SET_PARAMS32: {
 		struct snd_lsm_detection_params_32 det_params32;
 		struct snd_lsm_detection_params det_params;
+
 		if (copy_from_user(&det_params32, arg,
 				   sizeof(det_params32))) {
 			err = -EFAULT;
