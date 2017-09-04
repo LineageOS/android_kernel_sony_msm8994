@@ -351,7 +351,7 @@ static int handle_get_cmd(int cmd, int band,
 	/* Fix to handle Qualcomm bug */
 	param_len *= QCOM_GET_BUG_MULTIPLIER;
 
-	params_value = kzalloc(param_len, GFP_KERNEL);
+	params_value = kzalloc(param_len + sizeof(struct adm_param_data_v5), GFP_KERNEL);
 	if (!params_value) {
 		pr_err("%s: params memory alloc failed\n", __func__);
 		return -ENOMEM;
