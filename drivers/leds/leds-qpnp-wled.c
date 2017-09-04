@@ -261,6 +261,7 @@ struct qpnp_wled {
 	int curr_scale;
 	bool bl_scale_enabled;
 	int bl_scale;
+	bool prev_state;
 };
 
 static bool bl_on_in_boot;
@@ -755,13 +756,18 @@ static void qpnp_wled_work(struct work_struct *work)
 		}
 	}
 
-	rc = qpnp_wled_module_en(wled, wled->ctrl_base, !!level);
+	if (!!level != wled->prev_state) {
+		rc = qpnp_wled_module_en(wled, wled->ctrl_base, !!level);
 
-	if (rc) {
-		dev_err(&wled->spmi->dev, "wled %sable failed\n",
-					level ? "en" : "dis");
-		goto unlock_mutex;
+		if (rc) {
+			dev_err(&wled->spmi->dev, "wled %sable failed\n",
+						level ? "en" : "dis");
+			goto unlock_mutex;
+		}
+		usleep_range(100, 101);
 	}
+
+	wled->prev_state = !!level;
 unlock_mutex:
 	mutex_unlock(&wled->lock);
 }
