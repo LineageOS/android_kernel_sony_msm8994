@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wldev_common.c 674920 2016-12-13 08:36:06Z $
+ * $Id: wldev_common.c 701450 2017-05-25 02:10:23Z $
  */
 
 #include <osl.h>
@@ -87,8 +87,22 @@ s32 wldev_iovar_getbuf(
 	if (buf_sync) {
 		mutex_lock(buf_sync);
 	}
-	wldev_mkiovar(iovar_name, param, paramlen, buf, buflen);
+	if (buf && (buflen > 0)) {
+		/* initialize the response buffer */
+		memset(buf, 0, buflen);
+	} else {
+		ret = BCME_BADARG;
+		goto exit;
+	}
+	ret = wldev_mkiovar(iovar_name, param, paramlen, buf, buflen);
+	if (!ret) {
+		ret = BCME_BUFTOOSHORT;
+		goto exit;
+	}
+
 	ret = wldev_ioctl(dev, WLC_GET_VAR, buf, buflen, FALSE);
+
+exit:
 	if (buf_sync)
 		mutex_unlock(buf_sync);
 	return ret;
@@ -104,12 +118,20 @@ s32 wldev_iovar_setbuf(
 	if (buf_sync) {
 		mutex_lock(buf_sync);
 	}
+	if (buf && (buflen > 0)) {
+		/* initialize the response buffer */
+		memset(buf, 0, buflen);
+	} else {
+		ret = BCME_BADARG;
+		goto exit;
+	}
 	iovar_len = wldev_mkiovar(iovar_name, param, paramlen, buf, buflen);
 	if (iovar_len > 0)
 		ret = wldev_ioctl(dev, WLC_SET_VAR, buf, iovar_len, TRUE);
 	else
 		ret = BCME_BUFTOOSHORT;
 
+exit:
 	if (buf_sync)
 		mutex_unlock(buf_sync);
 	return ret;
@@ -121,7 +143,6 @@ s32 wldev_iovar_setint(
 	s8 iovar_buf[WLC_IOCTL_SMLEN];
 
 	val = htod32(val);
-	memset(iovar_buf, 0, sizeof(iovar_buf));
 	return wldev_iovar_setbuf(dev, iovar, &val, sizeof(val), iovar_buf,
 		sizeof(iovar_buf), NULL);
 }
@@ -133,7 +154,6 @@ s32 wldev_iovar_getint(
 	s8 iovar_buf[WLC_IOCTL_SMLEN];
 	s32 err;
 
-	memset(iovar_buf, 0, sizeof(iovar_buf));
 	err = wldev_iovar_getbuf(dev, iovar, pval, sizeof(*pval), iovar_buf,
 		sizeof(iovar_buf), NULL);
 	if (err == 0)
@@ -157,6 +177,11 @@ s32 wldev_mkiovar_bsscfg(
 	u32 prefixlen;
 	u32 namelen;
 	u32 iolen;
+
+	/* initialize buffer */
+	if (!iovar_buf || buflen == 0)
+		return BCME_BADARG;
+	memset(iovar_buf, 0, buflen);
 
 	if (bssidx == 0) {
 		return wldev_mkiovar((s8*)iovar_name, (s8 *)param, paramlen,
@@ -242,7 +267,7 @@ s32 wldev_iovar_setint_bsscfg(
 	s8 iovar_buf[WLC_IOCTL_SMLEN];
 
 	val = htod32(val);
-	memset(iovar_buf, 0, sizeof(iovar_buf));
+
 	return wldev_iovar_setbuf_bsscfg(dev, iovar, &val, sizeof(val), iovar_buf,
 		sizeof(iovar_buf), bssidx, NULL);
 }
@@ -254,7 +279,6 @@ s32 wldev_iovar_getint_bsscfg(
 	s8 iovar_buf[WLC_IOCTL_SMLEN];
 	s32 err;
 
-	memset(iovar_buf, 0, sizeof(iovar_buf));
 	err = wldev_iovar_getbuf_bsscfg(dev, iovar, pval, sizeof(*pval), iovar_buf,
 		sizeof(iovar_buf), bssidx, NULL);
 	if (err == 0)
@@ -272,6 +296,7 @@ int wldev_get_link_speed(
 
 	if (!plink_speed)
 		return -ENOMEM;
+	*plink_speed = 0;
 	error = wldev_ioctl(dev, WLC_GET_RATE, plink_speed, sizeof(int), 0);
 	if (unlikely(error))
 		return error;
@@ -306,6 +331,7 @@ int wldev_get_ssid(
 
 	if (!pssid)
 		return -ENOMEM;
+	memset(pssid, 0, sizeof(wlc_ssid_t));
 	error = wldev_ioctl(dev, WLC_GET_SSID, pssid, sizeof(wlc_ssid_t), 0);
 	if (unlikely(error))
 		return error;
@@ -318,6 +344,7 @@ int wldev_get_band(
 {
 	int error;
 
+	*pband = 0;
 	error = wldev_ioctl(dev, WLC_GET_BAND, pband, sizeof(uint), 0);
 	return error;
 }

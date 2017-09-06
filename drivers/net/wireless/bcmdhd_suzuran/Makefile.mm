@@ -125,15 +125,68 @@ DHDCFLAGS += -DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
 # Android Platform Definition
 ##############################
 
-## Andrioid KitKat ##
-
+###############################
+# Android M
+###############################
 DHDCFLAGS += -DWL_ENABLE_P2P_IF
-#DHDCFLAGS += -DWL_SUPPORT_BACKPORTED_KPATCHES
+
 # Default definitions for KitKat
 DHDCFLAGS += -DWL_CFG80211_STA_EVENT
 DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
 # To support p2p private command on kernel 3.8 or above
 DHDCFLAGS += -DWL_NEWCFG_PRIVCMD_SUPPORT
+
+ifneq ($(CONFIG_DHD_USE_SCHED_SCAN),)
+DHDCFLAGS += -DWL_SCHED_SCAN
+endif
+
+ifneq ($(CONFIG_BCM4339),)
+# To support GSCAN
+#DHDCFLAGS += -DGSCAN_SUPPORT
+
+# To support WL_VENDOR_EXT_SUPPORT
+DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
+
+# Extra file list for Lollipop
+ANDROID_OFILES := wl_cfgvendor.o
+endif
+
+ifneq ($(CONFIG_BCM43455),)
+# To support RTT
+DHDCFLAGS += -DRTT_SUPPORT
+# To support GSCAN
+DHDCFLAGS += -DGSCAN_SUPPORT
+# To support ePNO
+DHDCFLAGS += -DEPNO_SUPPORT
+# To support Link Statictics
+DHDCFLAGS += -DLINKSTAT_SUPPORT
+# To support Rssi Monitor
+DHDCFLAGS += -DRSSI_MONITOR_SUPPORT
+# To support WL_VENDOR_EXT_SUPPORT
+DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
+# To support ANQPO - GSCAN must be supported
+DHDCFLAGS += -DANQPO_SUPPORT
+
+
+
+# Extra file list for Android M, SOMC
+ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o bcmxtlv.o
+endif
+
+ifneq ($(CONFIG_BCM4354),)
+# To support RTT
+#DHDCFLAGS += -DRTT_SUPPORT
+# To support Link Statictics
+DHDCFLAGS += -DLINKSTAT_SUPPORT
+# To support GSCAN
+DHDCFLAGS += -DGSCAN_SUPPORT
+
+# To support WL_VENDOR_EXT_SUPPORT
+DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
+
+# Extra file list for Android M
+ANDROID_OFILES := wl_cfgvendor.o
+endif
 
 
 
@@ -303,5 +356,5 @@ DHDOFILES = bcmsdh.o bcmsdh_linux.o bcmsdh_sdmmc.o bcmsdh_sdmmc_linux.o \
 
 DHDOFILES += $(ANDROID_OFILES)
 
-obj-$(CONFIG_BCMDHD_SUZURAN) += bcmdhd.o
+obj-$(CONFIG_BCMDHD) += bcmdhd.o
 bcmdhd-objs += $(DHDOFILES)

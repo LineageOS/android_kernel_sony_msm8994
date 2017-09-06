@@ -349,4 +349,3 @@ DHDOFILES += $(ANDROID_OFILES)
 
 obj-$(CONFIG_BCMDHD_SUZURAN) += bcmdhd.o
 bcmdhd-objs += $(DHDOFILES)
-

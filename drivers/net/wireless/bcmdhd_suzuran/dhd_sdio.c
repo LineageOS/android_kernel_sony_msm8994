@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_sdio.c 567982 2015-07-01 06:24:39Z $
+ * $Id: dhd_sdio.c 701450 2017-05-25 02:10:23Z $
  */
 
 #include <typedefs.h>
@@ -4396,7 +4396,6 @@ dhd_txglom_enable(dhd_pub_t *dhdp, bool enable)
 	 */
 	dhd_bus_t *bus = dhdp->bus;
 #ifdef BCMSDIOH_TXGLOM
-	char buf[256];
 	uint32 rxglom;
 	int32 ret;
 
@@ -4409,9 +4408,8 @@ dhd_txglom_enable(dhd_pub_t *dhdp, bool enable)
 
 	if (enable) {
 		rxglom = 1;
-		memset(buf, 0, sizeof(buf));
-		bcm_mkiovar("bus:rxglom", (void *)&rxglom, 4, buf, sizeof(buf));
-		ret = dhd_wl_ioctl_cmd(dhdp, WLC_SET_VAR, buf, sizeof(buf), TRUE, 0);
+		ret = dhd_iovar(dhdp, 0, "bus:rxglom", (char *)&rxglom, sizeof(rxglom), NULL, 0,
+			TRUE);
 		if (ret >= 0)
 			bus->txglom_enable = TRUE;
 		else {

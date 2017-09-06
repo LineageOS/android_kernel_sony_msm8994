@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_bta.c 434656 2013-11-07 01:11:33Z $
+ * $Id: dhd_bta.c 701450 2017-05-25 02:10:23Z $
  */
 #error "WLBTAMP is not defined"
 
@@ -51,9 +51,7 @@ int
 dhd_bta_docmd(dhd_pub_t *pub, void *cmd_buf, uint cmd_len)
 {
 	amp_hci_cmd_t *cmd = (amp_hci_cmd_t *)cmd_buf;
-	uint8 buf[BTA_HCI_CMD_MAX_LEN + 16];
-	uint len = sizeof(buf);
-	wl_ioctl_t ioc;
+	int ret;
 
 	if (cmd_len < HCI_CMD_PREAMBLE_SIZE)
 		return BCME_BADLEN;
@@ -61,18 +59,11 @@ dhd_bta_docmd(dhd_pub_t *pub, void *cmd_buf, uint cmd_len)
 	if ((uint)cmd->plen + HCI_CMD_PREAMBLE_SIZE > cmd_len)
 		return BCME_BADLEN;
 
-	len = bcm_mkiovar("HCI_cmd",
-		(char *)cmd, (uint)cmd->plen + HCI_CMD_PREAMBLE_SIZE, (char *)buf, len);
+	ret = dhd_iovar(pub, 0, "HCI_cmd", (char *)cmd,
+		(uint)cmd->plen + HCI_CMD_PREAMBLE_SIZE, NULL, 0, TRUE);
 
 
-	memset(&ioc, 0, sizeof(ioc));
-
-	ioc.cmd = WLC_SET_VAR;
-	ioc.buf = buf;
-	ioc.len = len;
-	ioc.set = TRUE;
-
-	return dhd_wl_ioctl(pub, &ioc, ioc.buf, ioc.len);
+	return ret;
 }
 #else /* !SEND_HCI_CMD_VIA_IOCTL */
 
