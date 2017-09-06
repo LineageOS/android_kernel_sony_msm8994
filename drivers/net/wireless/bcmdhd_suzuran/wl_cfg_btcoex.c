@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfg_btcoex.c 637936 2016-05-16 08:29:08Z $
+ * $Id: wl_cfg_btcoex.c 701450 2017-05-25 02:10:23Z $
  */
 
 #include <net/rtnetlink.h>
@@ -89,8 +89,11 @@ dev_wlc_intvar_get_reg(struct net_device *dev, char *name,
 	} var;
 	int error;
 
-	bcm_mkiovar(name, (char *)(&reg), sizeof(reg),
-		(char *)(&var), sizeof(var.buf));
+	memset(&var, 0, sizeof(var));
+	error = bcm_mkiovar(name, (char *)(&reg), sizeof(reg), (char *)(&var), sizeof(var.buf));
+	if (error == 0) {
+		return BCME_BUFTOOSHORT;
+	}
 	error = wldev_ioctl(dev, WLC_GET_VAR, (char *)(&var), sizeof(var.buf), false);
 
 	*retval = dtoh32(var.val);
@@ -101,9 +104,12 @@ static int
 dev_wlc_bufvar_set(struct net_device *dev, char *name, char *buf, int len)
 {
 	char ioctlbuf_local[WLC_IOCTL_SMLEN];
+	int ret;
 
-	bcm_mkiovar(name, buf, len, ioctlbuf_local, sizeof(ioctlbuf_local));
-
+	memset(ioctlbuf_local, 0, sizeof(ioctlbuf_local));
+	ret = bcm_mkiovar(name, buf, len, ioctlbuf_local, sizeof(ioctlbuf_local));
+	if (ret == 0)
+		return BCME_BUFTOOSHORT;
 	return (wldev_ioctl(dev, WLC_SET_VAR, ioctlbuf_local, sizeof(ioctlbuf_local), true));
 }
 /*
