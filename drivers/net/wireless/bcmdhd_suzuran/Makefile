@@ -130,7 +130,7 @@ DHDCFLAGS += -DDISABLE_BCN_DLY
 ##############################
 # Android Platform Definition
 ##############################
-#ABSOLUTE_BCM_SRC_DIR :=	$(WLAN_ROOT)/bcmdhd_suzuran
+#ABSOLUTE_BCM_SRC_DIR := $(WLAN_ROOT)/bcmdhd_suzuran
 BCM_SRC_DIR := ./
 
 ###########
@@ -172,6 +172,7 @@ DHDCFLAGS += -DGSCAN_SUPPORT
 DHDCFLAGS += -DLINKSTAT_SUPPORT
 # To support WL_VENDOR_EXT_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
+
 # Extra file list for Lollipop
 ANDROID_OFILES := wl_cfgvendor.o
 endif
