@@ -7,11 +7,10 @@ DHDCFLAGS = -Wall -Wstrict-prototypes -Dlinux -DLINUX -DBCMDRIVER             \
         -DBCMDONGLEHOST -DUNRELEASEDCHIP -DBCMDMA32 -DBCMFILEIMAGE            \
         -DDHDTHREAD -DBDC -DOOB_INTR_ONLY                                     \
         -DDHD_BCMEVENTS -DSHOW_EVENTS -DBCMDBG                                \
-        -DMMC_SDIO_ABORT -DBCMSDIO -DBCMLXSDMMC -DWLP2P                       \
-        -DWIFI_ACT_FRAME -DARP_OFFLOAD_SUPPORT                                \
+        -DMMC_SDIO_ABORT -DBCMSDIO -DBCMLXSDMMC -DWLP2P     \
+        -DWIFI_ACT_FRAME -DARP_OFFLOAD_SUPPORT          \
         -DKEEP_ALIVE -DCSCAN -DPKT_FILTER_SUPPORT                             \
-        -DEMBEDDED_PLATFORM -DPNO_SUPPORT                                     \
-        -DCONFIG_DTS
+        -DEMBEDDED_PLATFORM -DPNO_SUPPORT
 
 ####################
 # Common feature
@@ -35,6 +34,7 @@ DHDCFLAGS += -DPROP_TXSTATUS
 DHDCFLAGS += -DWL_CFG80211_VSDB_PRIORITIZE_SCAN_REQUEST
 # For p2p connection issue
 DHDCFLAGS += -DWL_SCB_TIMEOUT=10
+
 # For Kernel ver > 3.6 or Kernel Patch required
 DHDCFLAGS += -DWL_SUPPORT_CHAN_BW
 
@@ -99,11 +99,7 @@ DHDCFLAGS += -DDHD_USE_IDLECOUNT
 # For special PNO Event keep wake lock for 10sec
 DHDCFLAGS += -DCUSTOM_PNO_EVENT_LOCK_xTIME=10
 # set keep alive period
-ifneq ($(CONFIG_SOMC_WLAN_KEEP_ALIVE_SETTING),)
-DHDCFLAGS += -DCUSTOM_KEEP_ALIVE_SETTING=$(CONFIG_SOMC_WLAN_KEEP_ALIVE_SETTING)
-else
 DHDCFLAGS += -DCUSTOM_KEEP_ALIVE_SETTING=55000
-endif
 # set roam setting values
 DHDCFLAGS += -DCUSTOM_ROAM_TRIGGER_SETTING=-75
 DHDCFLAGS += -DCUSTOM_ROAM_DELTA_SETTING=10
@@ -124,29 +120,21 @@ DHDCFLAGS += -DDISABLE_TXBFR
 
 DHDCFLAGS += -DDHD_DONOT_FORWARD_BCMEVENT_AS_NETWORK_PKT
 
-# Disable to delay link down event
-DHDCFLAGS += -DDISABLE_BCN_DLY
 
 ##############################
 # Android Platform Definition
 ##############################
-#ABSOLUTE_BCM_SRC_DIR :=	$(WLAN_ROOT)/bcmdhd_suzuran
-BCM_SRC_DIR := ./
 
-###########
-# Lollipop
-###########
+###############################
+# Android M
+###############################
 DHDCFLAGS += -DWL_ENABLE_P2P_IF
-#DHDCFLAGS += -DWL_SUPPORT_BACKPORTED_KPATCHES
+
 # Default definitions for KitKat
 DHDCFLAGS += -DWL_CFG80211_STA_EVENT
 DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
 # To support p2p private command on kernel 3.8 or above
 DHDCFLAGS += -DWL_NEWCFG_PRIVCMD_SUPPORT
-
-ifeq ($(CONFIG_BCMDHD_INSMOD_NO_FW_LOAD),y)
-  DHDCFLAGS += -DENABLE_INSMOD_NO_FW_LOAD
-endif
 
 ifneq ($(CONFIG_DHD_USE_SCHED_SCAN),)
 DHDCFLAGS += -DWL_SCHED_SCAN
@@ -165,30 +153,39 @@ endif
 
 ifneq ($(CONFIG_BCM43455),)
 # To support RTT
-#DHDCFLAGS += -DRTT_SUPPORT
+DHDCFLAGS += -DRTT_SUPPORT
 # To support GSCAN
 DHDCFLAGS += -DGSCAN_SUPPORT
+# To support ePNO
+DHDCFLAGS += -DEPNO_SUPPORT
 # To support Link Statictics
 DHDCFLAGS += -DLINKSTAT_SUPPORT
+# To support Rssi Monitor
+DHDCFLAGS += -DRSSI_MONITOR_SUPPORT
 # To support WL_VENDOR_EXT_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
-# Extra file list for Lollipop
-ANDROID_OFILES := wl_cfgvendor.o
+# To support ANQPO - GSCAN must be supported
+DHDCFLAGS += -DANQPO_SUPPORT
+
+
+
+# Extra file list for Android M, SOMC
+ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o bcmxtlv.o
 endif
 
 ifneq ($(CONFIG_BCM4354),)
 # To support RTT
-DHDCFLAGS += -DRTT_SUPPORT
+#DHDCFLAGS += -DRTT_SUPPORT
 # To support Link Statictics
 DHDCFLAGS += -DLINKSTAT_SUPPORT
 # To support GSCAN
-#DHDCFLAGS += -DGSCAN_SUPPORT
+DHDCFLAGS += -DGSCAN_SUPPORT
 
 # To support WL_VENDOR_EXT_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
 
-# Extra file list for Lollipop
-ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o
+# Extra file list for Android M
+ANDROID_OFILES := wl_cfgvendor.o
 endif
 
 
@@ -344,85 +341,21 @@ endif
 # DHDCFLAGS += -DWL_ABORT_SCAN
 endif
 
-# Read custom mac address function
-DHDCFLAGS += -DGET_CUSTOM_MAC_ENABLE
-
-# Default Beacon timeout
-ifneq ($(CONFIG_SOMC_WLAN_BCN_TIMEOUT),)
-  DHDCFLAGS += -DSOMC_WLAN_BCN_TIMEOUT=$(CONFIG_SOMC_WLAN_BCN_TIMEOUT)
-else
-  DHDCFLAGS += -DSOMC_WLAN_BCN_TIMEOUT=3
-endif
-
-# The number of the maximum devices which phone can associate
-DHDCFLAGS += -DSOMC_MAX_ASSOC_NUM=10
-
-# Default Listen Interval in Beacons
-ifneq ($(CONFIG_SOMC_WLAN_LISTEN_INTERVAL),)
-  DHDCFLAGS += -DCUSTOM_LISTEN_INTERVAL=$(CONFIG_SOMC_WLAN_LISTEN_INTERVAL)
-endif
-
-# WAPI
-DHDCFLAGS += -DBCMWAPI_WPI -DBCMWAPI_WAI
-
-# Set the number of probe requests per channel
-ifneq ($(CONFIG_SOMC_WLAN_SCAN_NPROBES),)
-  DHDCFLAGS += -DSOMC_WLAN_SCAN_NPROBES=$(CONFIG_SOMC_WLAN_SCAN_NPROBES)
-endif
-
-# Set default nvram path
-ifneq ($(CONFIG_SOMC_WLAN_NVRAM_PATH),)
-  DHDCFLAGS += -DCONFIG_BCMDHD_NVRAM_PATH=\"$(CONFIG_SOMC_WLAN_NVRAM_PATH)\"
-endif
-
-# Change scan time
-ifeq ($(CONFIG_SOMC_CFG_WLAN_CHANGE_SCAN_TIME),y)
-  DHDCFLAGS += -DCHANGE_SCAN_TIME
-endif
-
 #EXTRA_LDFLAGS += --strip-debug
 EXTRA_CFLAGS += $(DHDCFLAGS) -DDHD_DEBUG
 EXTRA_CFLAGS += -DSRCBASE=\"$(src)\"
 EXTRA_CFLAGS += -I$(src)/include/ -I$(src)/
 KBUILD_CFLAGS += -I$(LINUXDIR)/include -I$(shell pwd)
 
-MODNAME := bcmdhd
-
-DHDOFILES := 	bcmsdh.o \
-			bcmsdh_linux.o \
-			bcmsdh_sdmmc.o \
-			bcmsdh_sdmmc_linux.o \
-			dhd_cdc.o \
-			dhd_cfg80211.o \
-			dhd_common.o \
-			dhd_custom_gpio.o \
-			dhd_ip.o \
-			dhd_linux.o \
-			dhd_linux_sched.o \
-			dhd_sdio.o \
-			dhd_pno.o \
-			dhd_wlfc.o \
-			dhd_linux_wq.o \
-			aiutils.o \
-			bcmevent.o \
-			bcmutils.o \
-			bcmwifi_channels.o \
-			hndpmu.o \
-			linux_osl.o \
-			sbutils.o \
-			siutils.o \
-			wldev_common.o \
-			wl_cfg_btcoex.o \
-			wl_android.o \
-			wl_cfg80211.o \
-			wl_cfgp2p.o \
-			wl_linux_mon.o \
-			dhd_linux_platdev.o \
-			dhd_somc_custom.o
+DHDOFILES = bcmsdh.o bcmsdh_linux.o bcmsdh_sdmmc.o bcmsdh_sdmmc_linux.o \
+	dhd_cdc.o dhd_cfg80211.o dhd_common.o dhd_custom_gpio.o dhd_ip.o    \
+	dhd_linux.o dhd_linux_sched.o dhd_sdio.o dhd_pno.o dhd_wlfc.o dhd_linux_wq.o aiutils.o       \
+	bcmevent.o bcmutils.o bcmwifi_channels.o hndpmu.o linux_osl.o       \
+	sbutils.o siutils.o wldev_common.o wl_cfg_btcoex.o wl_android.o wl_cfg80211.o       \
+	wl_cfgp2p.o wl_linux_mon.o dhd_linux_platdev.o dhd_somc_custom.o
 
 DHDOFILES += $(ANDROID_OFILES)
 
-# Module information used by KBuild framework
-obj-$(CONFIG_BCMDHD_SUZURAN) += $(MODNAME).o
+obj-$(CONFIG_BCMDHD_SUZURAN) += bcmdhd.o
+bcmdhd-objs += $(DHDOFILES)
 
-$(MODNAME)-objs := $(DHDOFILES)

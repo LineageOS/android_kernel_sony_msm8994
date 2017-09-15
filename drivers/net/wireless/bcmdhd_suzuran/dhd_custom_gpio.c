@@ -21,7 +21,7 @@
 * software in any way with any other Broadcom software provided under a license
 * other than the GPL, without Broadcom's express prior written consent.
 *
-* $Id: dhd_custom_gpio.c 493522 2014-07-28 04:43:49Z $
+* $Id: dhd_custom_gpio.c 684925 2017-02-15 01:55:31Z $
 */
 
 #include <typedefs.h>
@@ -33,7 +33,9 @@
 #include <dhd_linux.h>
 
 #include <wlioctl.h>
+#if defined(WL_WIRELESS_EXT)
 #include <wl_iw.h>
+#endif
 
 #define WL_ERROR(x) printf x
 #define WL_TRACE(x)
@@ -184,6 +186,11 @@ dhd_custom_get_mac_address(void *adapter, unsigned char *buf)
 }
 #endif /* GET_CUSTOM_MAC_ENABLE */
 
+struct cntry_locales_custom {
+	char iso_abbrev[WLC_CNTRY_BUF_SZ];	/* ISO 3166-1 country abbreviation */
+	char custom_locale[WLC_CNTRY_BUF_SZ];	/* Custom firmware locale */
+	int32 custom_locale_rev;		/* Custom local revisin default -1 */
+};
 /* Customized Locale table : OPTIONAL feature */
 const struct cntry_locales_custom translate_custom_table[] = {
 /* Table should be filled out based on custom platform regulatory requirement */

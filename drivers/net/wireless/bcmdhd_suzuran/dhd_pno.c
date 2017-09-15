@@ -3657,8 +3657,14 @@ dhd_handle_swc_evt(dhd_pub_t *dhd, const void *event_data, int *send_evt_bytes)
 	}
 
 	change_array = &params->change_array[params->results_rxed_so_far];
-	memcpy(change_array, results->list, sizeof(wl_pfn_significant_net_t) * results->pkt_count);
-	params->results_rxed_so_far += results->pkt_count;
+	if ((params->results_rxed_so_far + results->pkt_count) <= results->total_count) {
+		memcpy(change_array, results->list,
+			sizeof(wl_pfn_significant_net_t) * results->pkt_count);
+		params->results_rxed_so_far += results->pkt_count;
+	} else {
+		/* In case of spurious event or invalid data send hang event */
+		dhd_os_send_hang_message(dhd);
+	}
 
 	if (params->results_rxed_so_far == results->total_count) {
 		params->results_rxed_so_far = 0;
@@ -3873,11 +3879,27 @@ dhd_pno_process_anqpo_result(dhd_pub_t *dhd, const void *data, uint32 event, int
 {
 	wl_bss_info_t *bi = (wl_bss_info_t *)data;
 	wifi_gscan_result_t *result = NULL;
-	wl_event_gas_t *gas_data = (wl_event_gas_t *)((uint8 *)data +
-		OFFSETOF(wifi_gscan_result_t, ie_data) + bi->ie_length);
+	wl_event_gas_t *gas_data;
 	uint8 channel;
 	uint32 mem_needed;
 	struct timespec ts;
+
+	if ((bi->SSID_len > DOT11_MAX_SSID_LEN) ||
+	    (bi->ie_length > (*size - sizeof(wl_bss_info_t))) ||
+	    (bi->ie_offset < sizeof(wl_bss_info_t)) ||
+	    (bi->ie_offset > (sizeof(wl_bss_info_t) + bi->ie_length))) {
+		DHD_ERROR(("%s: tot:%d,SSID:%d,ie_len:%d,ie_off:%d\n",
+			__FUNCTION__, *size, bi->SSID_len,
+			bi->ie_length, bi->ie_offset));
+		return NULL;
+	}
+
+	gas_data = (wl_event_gas_t *)((uint8 *)data + bi->ie_offset + bi->ie_length);
+	if (gas_data->data_len > (*size - (bi->ie_offset + bi->ie_length))) {
+		DHD_ERROR(("%s: wrong gas_data_len:%d\n",
+			__FUNCTION__, gas_data->data_len));
+		return NULL;
+	}
 
 	if (event == WLC_E_PFN_NET_FOUND) {
 		mem_needed = OFFSETOF(wifi_gscan_result_t, ie_data) + bi->ie_length +
