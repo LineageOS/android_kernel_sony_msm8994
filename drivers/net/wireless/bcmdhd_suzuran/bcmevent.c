@@ -20,7 +20,7 @@
  *      Notwithstanding the above, under no circumstances may you combine this
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
- * $Id: bcmevent.c 696097 2017-04-25 09:26:01Z $
+ * $Id: bcmevent.c 718508 2017-08-31 02:48:38Z $
  */
 
 #include <typedefs.h>
@@ -154,7 +154,6 @@ const bcmevent_name_t bcmevent_names[] = {
 	BCMEVENT_NAME(WLC_E_TXFAIL_THRESH),
 #ifdef GSCAN_SUPPORT
 	BCMEVENT_NAME(WLC_E_PFN_GSCAN_FULL_RESULT),
-	BCMEVENT_NAME(WLC_E_PFN_SWC),
 #endif /* GSCAN_SUPPORT */
 	BCMEVENT_NAME(WLC_E_RMC_EVENT),
 #ifdef GSCAN_SUPPORT

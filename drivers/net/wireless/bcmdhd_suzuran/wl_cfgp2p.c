@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfgp2p.c 531064 2015-02-02 07:59:42Z $
+ * $Id: wl_cfgp2p.c 711630 2017-07-19 04:16:07Z $
  *
  */
 #include <typedefs.h>
@@ -2290,8 +2290,9 @@ wl_cfgp2p_find_attrib_in_all_p2p_Ies(u8 *parse, u32 len, u32 attrib)
 				return pAttrib;
 			}
 			else {
-				parse += (ie->len + TLV_HDR_LEN);
-				len -= (ie->len + TLV_HDR_LEN);
+				/* move to next IE */
+				len -= (u32)((u8 *)ie + TLV_HDR_LEN + ie->len - parse);
+				parse = (uint8 *)ie + TLV_HDR_LEN + ie->len;
 				CFGP2P_INFO(("P2P Attribute %d not found Moving parse"
 					" to %p len to %d", attrib, parse, len));
 			}

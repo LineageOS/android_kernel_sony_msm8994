@@ -133,11 +133,11 @@ DHDCFLAGS += -DDISABLE_BCN_DLY
 #ABSOLUTE_BCM_SRC_DIR := $(WLAN_ROOT)/bcmdhd_suzuran
 BCM_SRC_DIR := ./
 
-###########
-# Lollipop
-###########
+###############################
+# Android M
+###############################
 DHDCFLAGS += -DWL_ENABLE_P2P_IF
-#DHDCFLAGS += -DWL_SUPPORT_BACKPORTED_KPATCHES
+
 # Default definitions for KitKat
 DHDCFLAGS += -DWL_CFG80211_STA_EVENT
 DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
@@ -165,31 +165,37 @@ endif
 
 ifneq ($(CONFIG_BCM43455),)
 # To support RTT
-#DHDCFLAGS += -DRTT_SUPPORT
+DHDCFLAGS += -DRTT_SUPPORT
 # To support GSCAN
 DHDCFLAGS += -DGSCAN_SUPPORT
+# To support ePNO
+DHDCFLAGS += -DEPNO_SUPPORT
 # To support Link Statictics
 DHDCFLAGS += -DLINKSTAT_SUPPORT
+# To support Rssi Monitor
+DHDCFLAGS += -DRSSI_MONITOR_SUPPORT
 # To support WL_VENDOR_EXT_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
+# To support ANQPO - GSCAN must be supported
+DHDCFLAGS += -DANQPO_SUPPORT
 
-# Extra file list for Lollipop
-ANDROID_OFILES := wl_cfgvendor.o
+# Extra file list for Android M, SOMC
+ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o bcmxtlv.o
 endif
 
 ifneq ($(CONFIG_BCM4354),)
 # To support RTT
-DHDCFLAGS += -DRTT_SUPPORT
+#DHDCFLAGS += -DRTT_SUPPORT
 # To support Link Statictics
 DHDCFLAGS += -DLINKSTAT_SUPPORT
 # To support GSCAN
-#DHDCFLAGS += -DGSCAN_SUPPORT
+DHDCFLAGS += -DGSCAN_SUPPORT
 
 # To support WL_VENDOR_EXT_SUPPORT
 DHDCFLAGS += -DWL_VENDOR_EXT_SUPPORT
 
-# Extra file list for Lollipop
-ANDROID_OFILES := wl_cfgvendor.o dhd_rtt.o
+# Extra file list for Android M
+ANDROID_OFILES := wl_cfgvendor.o
 endif
 
 
@@ -342,7 +348,7 @@ endif
   # Radio_stat v2 - data structure is updated
   DHDCFLAGS += -DLINKSTAT_V2
 
-# DHDCFLAGS += -DWL_ABORT_SCAN
+  DHDCFLAGS += -DWL_ABORT_SCAN
 endif
 
 # Read custom mac address function

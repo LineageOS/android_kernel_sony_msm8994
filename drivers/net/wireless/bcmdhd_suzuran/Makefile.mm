@@ -356,5 +356,5 @@ DHDOFILES = bcmsdh.o bcmsdh_linux.o bcmsdh_sdmmc.o bcmsdh_sdmmc_linux.o \
 
 DHDOFILES += $(ANDROID_OFILES)
 
-obj-$(CONFIG_BCMDHD) += bcmdhd.o
+obj-$(CONFIG_BCMDHD_SUZURAN) += bcmdhd.o
 bcmdhd-objs += $(DHDOFILES)

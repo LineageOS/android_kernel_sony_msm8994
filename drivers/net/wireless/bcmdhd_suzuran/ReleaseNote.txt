@@ -1,0 +1,213 @@
+DHD 1.141.X Release for BCM4339, 4354, 43455 SDIO Projects.
+
+--------------------------------
+Change History
+--------------------------------
+DHD 1.141.67.30 - 2017.8.31
+    - Security fix
+      - CVE-2017-0786 A-37351060 Added boundary check in wl_escan_handler() 
+      - CVE-2017-0787 A-37722970 Added boundary check in dhd_pno_process_epno_result() 
+      - CVE-2017-0788 A-37722328 Added boundary check in dhd_handle_hotlist_scan_evt() 
+      - CVE-2017-0789 A-37685267 Removed unused SWC feature 
+      - CVE-2017-0790 A-37357704 Added boundary check in dhd_process_full_gscan_result() 
+      - CVE-2017-0791 A-37306719 Added event length check in wl_notify_rx_mgmt_frame() 
+      - CVE-2017-0792 A-37305578 Added event length check in dhd_rtt_event_handler() 
+      - V2017070601 Added P2P IE length check in parsing routine 
+
+DHD 1.141.67.29 - 2017.6.27
+    - Security fix
+        - CVE-2017-0705 A-34973477 Added a boundary check in the handling of gscan attribute for significant change bssids
+        - CVE-2017-0706 A-35195787 Added a length check of tx mgmt frame
+
+DHD 1.141.67.28 - 2017.5.26
+    - Security fix
+        - CVE-2017-0633 Enhanced buffer usage in IOCTL path
+        - CVE-2016-0802 Code enhancement for prevention of overflow
+
+DHD 1.141.67.27 - 2017.3.24
+    - Google security fix 
+        - Fix buffer overrun in wl_cfg80211_add_iw_ie, CVE-2017-0567, A-32125310.
+        - Fix buffer overrun in wl_run_escan, CVE-2017-0568, A-34197514.
+        - Fix buffer overrun in dhd_wlfc_reorderinfo_indicate, CVE-2017-0571, A-34203305.
+        - Fix buffer overrun in dhd_pno_process_anqpo_result, CVE-2017-0572, A-34198931.
+        - Prevent stack overflow related with AKM suite count, CVE-2017-0573, A-34469904.
+
+DHD 1.141.67.26 - 2017.2.24
+     - Google security fix - Prevent buffer overflow of "default_chan_list" in wl_run_escan().
+     - Google security fix - Check a "results->pkt_count" length not to exceed allocated memory length.
+     - Google security fix - Removing the unused WEXT file, A-32124445     
+
+DHD 1.141.67.25 - 2017.1.24
+     - Google Security Patch - fix possible use-after-free case, A-32838767
+
+DHD 1.141.67.24 - 2016.12.30
+     - Fix for PMF AP Connectivity issue [CASE# 1097627]
+     - Fix for p2p disconnection when switching AP [CASE# 1095787]
+     - Google Security - Elevation of privilege vulnerability in Broadcom Wi-Fi driver
+      *A-32174590
+      *A-32219255
+      *A-32219453
+      *A-29000183
+      *A-32474971
+      (A-24739315 / A-32219121 / A-31822524 is not needed for 43455)
+
+DHD 1.141.67.23 - 2016.09.09
+     - Google security fix.(ANDROID-29009982)
+
+DHD 1.141.67.22 - 2016.07.08
+     - Google security enhancement of previous vulnerability fix.(ANDROID-26492805)
+
+DHD 1.141.67.21 - 2016.05.20
+     - Android security fixes.(ANDROID-26425765, ANDROID-26571522)
+     - Fix a buffer overwrite in dev_wlc_bufvar_set(). [CASE# 1021341]
+     - Changing copyright of driver files to open copyright. [CASE# 1044970]
+
+DHD 1.141.67.20 - 2016.03.21
+     - Fix extra vulnerabilities reported by google.
+
+DHD 1.141.67.19 - 2016.02.22
+     - Fix vulnerabilities reported by google - validate remaining space in WPS IE.
+
+DHD 1.141.67.18 - 2016.01.12
+     - Avoiding corner case accessing suspended sd host unexpectedly. [CASE# 1003434]
+     - Fixing P2P group add issue in 5GHz. [CASE# 1005073]
+     - Ethernet type security vulnerability fix in DHD.
+     - Fixes potential buffer overflow when parsing WPS_ID_DEVICE_NAME and in  sched scan result handler.
+
+DHD 1.141.67.17 - 2015.12.08
+     - Fix host memory corruption problem related with linkstat. [CASE# 999609, 999642], Kitakami R2.1 43455, Loire 43455
+     - Porting scan_abort feature from Kernel. [CASE# 998204], Loire 43455
+
+DHD 1.141.67.16 - 2015.11.20
+     - Enabled Gscan in the Makefile for Shinano R2.2 4354
+     - Disable Lossless Roaming for FT over DS and FT over Air for Shinano R2 4339
+     - Fix build failure with lower version of kernel
+
+DHD 1.141.67.15 - 2015.11.10
+     - Additional Android M updates for Loire
+       - 11mc ftm 
+       - ePNO 
+       - RSSI Monitoring 
+       - ANQP offload
+
+DHD 1.141.67.14 - 2015.11.04
+     - Android M updates
+	- Add mkeep_alive feature
+	- 5GHz Softap
+	- Gscan Updates
+	- LinkStat DHD Updates
+		
+DHD 1.141.67.13 - 2015.08.17
+    - Not to forward BRCM event as a network pkt '0x886c' [CASE# 952625], Shinano 2.1, Kitakami R2,43455
+
+DHD 1.141.67.12 - 2015.07.15
+    - Add srl/lrl value setting in Softap, fix the issue not set properly. [CASE# 912911, 930776], Shinano 2.1, Kitakami R2,43455
+    - Fix for P2P TA issue[ CASE#943732], Kitakami R2, 43455
+    - Fix for linkstat buffer corruption causing android framework crash [CASE # 940151], Shinano R2.1(4354), Kitakami R2, 43455
+    
+DHD 1.141.67.11  - 2015.07.08
+    - 4-way handshake delayed when roaming due to uplink traffic (Shinano 2.1 BCM4339 CASE#886484)
+    - Add bcn_to_dly iovar to control link_down event,(Kitakami R2 43455 CASE#912211)
+    - GSCAN fix only for Kitakami R2 43455
+    
+DHD 1.141.67.10  - 2015.05.29
+    - Add DHD flag to disable 11N proprietary rates. (Kitakami R2 43455 CASE#927300)
+    - Disable TX Beamforming (tx only). (Kitakami R2 43455 CASE#925270)
+
+DHD 1.141.67.9  - 2015.04.30
+    -  TDLS mgmt build error fix CASE#844655 (CASE#911280)
+    
+DHD 1.141.67.8  - 2015.04.14
+    - Firmware not responding (when running batch scan while in dhcp negotiation (CASE#907419)
+    - Question regarding a huge kmalloc barely used (CASE#903335)
+    - Code questions (CASE#896789)
+    - WL_VENDOR_EXT_SUPPORT definition (CASE#901912)
+    - Release wake lock("wlan_wake") when terminating event thread
+
+DHD 1.141.67.7  - 2015.03.13
+    - Use if_counters for connection statistics per interface when available, CSP:892522, Only available in Kitakami R2 43455. 
+    - Fix for ARP stuck issue in multihoming CSP:895926
+
+DHD 1.141.67.6 - 2015.02.03
+    - Support for 43455.
+    - Support for 64 bits host system.
+    - Update some copyright notices.
+    - Fix for driver fails to load if previous instance of wpa_supplicant did not terminate properly.
+    - Reduce P2P connection time.
+
+DHD 1.141.67.5 - 2015.01.09
+    - Fill the vht_cap field of ieee80211_supported_band(Wrong Max link rate for VHT), CSP #862670
+    - Reset beacon found status whenever regulatory domain settings are changed, CSP #868771
+    - Allow to scan for p2p on passive channel, CSP #868771
+    - Fix trap in dhd_free(), CSP #874320
+    - Creating P2P group in available bandwidths in passive channels on 5GHz region, CSP #830497
+           
+DHD 1.141.67.4 - 2014.12.5
+   - Fix build errors caused by Android L updates, 
+   - Fix some warning and potential build error with Kernel 3.8 above. 
+
+DHD 1.141.67.3 - 2014.11.20 (Google L support)
+   - Including android Google L adaptation code
+     (Gscan, Linkstat, Private PNO and RTT which can be selectable in Makefie)
+   - Makefile(Google Android L), Makefile.kk (for Kitkat)
+   - Enable Dongle memory dump feature. 
+   - Increase max nvram buffer size. 
+ 
+DHD 1.141.67.2 - 2014.09.05
+   - Fix for WFA PMF_AP certification. CSP #824822
+   - Netif packet counters are not updated in wlfc flow control
+   - Adding check routine , wakelock, during softap
+   - WiFi Direct Certification 5.1.20 change GAS frame handling. 
+   - hostapd ap_info null ptr check added. 
+
+DHD 1.141.67.1 - 2014.07.28
+  - Update Ccode translate table for SOMC
+  - Don't use wlfc info exchange when a device is asleep on SDIO
+  - Increase MAX_CNTL_TX_TIMEOUT to 3 from 2 by specifying it in Makefile. CSP # 800769
+  
+DHD 1.141.67 - 2014.07.09
+  - Keep connection while regulatory code change  -  CSP #803478
+  - Including action code for tunneled prob req to set wfd ie. CSP # 809533
+  - MAX_KSO_ATTEMPTS changed to 64, same as R1's
+  - Prevent running wl_event_handler while HANG is occurred
+  - Fix for hostapd buffer free
+    
+DHD 1.141.65 -  2014.06.05
+  - Fix mmc error at re-loading dhd driver CSP#779847
+  - Add supports for tdls management frames CSP#778769
+  - P2P fails after a driver stop / start in the kernel 3.10
+  - Increase assoc_retry_max from 3 to 7 to increase a connection rate in very noisy environmnet. 
+  - Added definition SUPPORT_P2P_GO_PS in checking bus_sleep code
+  - Fix multi-AC detection logic to look at rx packets as well as tx packets 
+
+DHD 1.141.60 -  2014.05.16
+
+ - CSP 791385, tdls auto enable delete in Makefile
+ - CSP 796606, SOFTAP WPS tethering issue fixed
+ - CSP:779847 Fix mmc error at re-loading dhd driver
+ - CSP:793836 Fix for coverity issue
+ - CSP:770822 Add driver private command to recover link quality
+ - CSP: 790918 bcn_timeout value change to 8 when VSDB or roaming are enabled
+ - Deleting set IRQF_TRIGGER_MASK for preventing clear setting of board configuration
+ - Use CONFIG_COMAT method to make 32-bit ioctl working with 64-bit kernel
+ - Protect the cfg->ioctl_buf against the wl_set_tx_power/wl_get_tx_power function
+ - Add check bus sleep check code in dhdsdio_suspend
+ - Fixed getting chanspec value when handling DFS channels
+ - Add KSO_ENAB check code in dhd_bcmsdh_send_buf function
+ - Dynamic change thread priority, policy by use sysfs. value path is /sys/class/net/wlan0/dpc_prio
+ - Packet was freed before both proptxstatus and txcomplete finished
+ - Fix chanspec mismatch
+ - Fix multicast recive in P2P mode
+ - Kernel 3.14 support 
+ - Remove the duplicated kfree of ndev->ieee80211_ptr pointer in wl_dealloc_netinfo
+ - Prevent the RTNL assertion when calling the cfg80211_unregister_wdev function while dhd_module_cleanup
+ - Remove the kernel version dependency in case of using wl_cfg80211_remove_if in wl_cfg80211_handle_ifdel function.
+ - Country/Revision is not initialized after Wi-Fi off->on
+ - Fix the incorrect channel extraction from chanspec when 0 is given as a control channel while scanning
+ - Supporting WNM Notification for HS20 REL2
+ - Applying Interaction with MFP by Spec HS2.0 REL2 
+
+
+2014.03.19 - DHD 1.141.48
+ - Initial Release for Shinano R2, BCM4339 & BCM4354
+

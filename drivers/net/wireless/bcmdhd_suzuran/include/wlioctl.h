@@ -24,7 +24,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wlioctl.h 598402 2015-11-09 13:36:35Z $
+ * $Id: wlioctl.h 718508 2017-08-31 02:48:38Z $
  */
 
 #ifndef _wlioctl_h_
@@ -2545,10 +2545,6 @@ enum {
 
 #define PFN_PARTIAL_SCAN_BIT		0
 #define PFN_PARTIAL_SCAN_MASK		1
-
-#define PFN_SWC_RSSI_WINDOW_MAX   8
-#define PFN_SWC_MAX_NUM_APS       16
-#define PFN_HOTLIST_MAX_NUM_APS   64
 
 #define PFN_SWC_RSSI_WINDOW_MAX   8
 #define PFN_SWC_MAX_NUM_APS       16

@@ -22,7 +22,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfg80211.c 704367 2017-06-13 09:05:24Z $
+ * $Id: wl_cfg80211.c 718508 2017-08-31 02:48:38Z $
  */
 /* */
 #include <typedefs.h>
@@ -8944,15 +8944,6 @@ wl_notify_gscan_event(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 	u32 len = ntoh32(e->datalen);
 
 	switch (event) {
-		case WLC_E_PFN_SWC:
-			ptr = dhd_dev_swc_scan_event(ndev, data, &send_evt_bytes);
-			if (send_evt_bytes) {
-				wl_cfgvendor_send_async_event(wiphy, ndev,
-				    GOOGLE_GSCAN_SIGNIFICANT_EVENT, ptr, send_evt_bytes);
-				kfree(ptr);
-			} else
-				err = -ENOMEM;
-			break;
 		case WLC_E_PFN_BEST_BATCHING:
 			err = dhd_dev_retrieve_batch_scan(ndev);
 			if (err < 0) {
@@ -8999,7 +8990,7 @@ wl_notify_gscan_event(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 			}
 			break;
 		case WLC_E_PFN_GSCAN_FULL_RESULT:
-			ptr = dhd_dev_process_full_gscan_result(ndev, data, &send_evt_bytes);
+			ptr = dhd_dev_process_full_gscan_result(ndev, data, len, &send_evt_bytes);
 			if (ptr) {
 				wl_cfgvendor_send_async_event(wiphy, ndev,
 				    GOOGLE_SCAN_FULL_RESULTS_EVENT, ptr, send_evt_bytes);
@@ -9201,14 +9192,25 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 	wifi_p2p_pub_act_frame_t *act_frm = NULL;
 	wifi_p2p_action_frame_t *p2p_act_frm = NULL;
 	wifi_p2psd_gas_pub_act_frame_t *sd_act_frm = NULL;
-	wl_event_rx_frame_data_t *rxframe =
-		(wl_event_rx_frame_data_t*)data;
-	u32 event = ntoh32(e->event_type);
+	wl_event_rx_frame_data_t *rxframe;
+	u32 event;
 	u8 *mgmt_frame;
-	u8 bsscfgidx = e->bsscfgidx;
-	u32 mgmt_frame_len = ntoh32(e->datalen) - sizeof(wl_event_rx_frame_data_t);
-	u16 channel = ((ntoh16(rxframe->channel) & WL_CHANSPEC_CHAN_MASK));
-
+	u8 bsscfgidx;
+	u32 mgmt_frame_len;
+	u16 channel;
+	if (ntoh32(e->datalen) < sizeof(wl_event_rx_frame_data_t)) {
+		WL_ERR(("wrong datalen:%d\n", ntoh32(e->datalen)));
+		return -EINVAL;
+	}
+	mgmt_frame_len = ntoh32(e->datalen) - sizeof(wl_event_rx_frame_data_t);
+	event = ntoh32(e->event_type);
+	bsscfgidx = e->bsscfgidx;
+	rxframe = (wl_event_rx_frame_data_t *)data;
+	if (!rxframe) {
+		WL_ERR(("rxframe: NULL\n"));
+		return -EINVAL;
+	}
+	channel = (ntoh16(rxframe->channel) & WL_CHANSPEC_CHAN_MASK);
 	memset(&bssid, 0, ETHER_ADDR_LEN);
 
 	ndev = cfgdev_to_wlc_ndev(cfgdev, cfg);
@@ -9346,7 +9348,10 @@ wl_notify_rx_mgmt_frame(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 		WL_DBG((" Event WLC_E_PROBREQ_MSG received\n"));
 		mgmt_frame = (u8 *)(data);
 		mgmt_frame_len = ntoh32(e->datalen);
-
+		if (mgmt_frame_len < DOT11_MGMT_HDR_LEN) {
+			WL_ERR(("wrong datalen:%d\n", mgmt_frame_len));
+			return -EINVAL;
+		}
 		prbreq_ie_len = mgmt_frame_len - DOT11_MGMT_HDR_LEN;
 
 		/* Parse prob_req IEs */
@@ -9586,7 +9591,6 @@ static void wl_init_event_handler(struct bcm_cfg80211 *cfg)
 	cfg->evt_handler[WLC_E_PFN_BEST_BATCHING] = wl_notify_gscan_event;
 	cfg->evt_handler[WLC_E_PFN_SCAN_COMPLETE] = wl_notify_gscan_event;
 	cfg->evt_handler[WLC_E_PFN_GSCAN_FULL_RESULT] = wl_notify_gscan_event;
-	cfg->evt_handler[WLC_E_PFN_SWC] = wl_notify_gscan_event;
 	cfg->evt_handler[WLC_E_PFN_BSSID_NET_FOUND] = wl_notify_gscan_event;
 	cfg->evt_handler[WLC_E_PFN_BSSID_NET_LOST] = wl_notify_gscan_event;
 	cfg->evt_handler[WLC_E_PFN_SSID_EXT] = wl_notify_gscan_event;
@@ -10035,6 +10039,11 @@ static s32 wl_escan_handler(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
 		WL_INFO(("WLC_E_STATUS_PARTIAL \n"));
 		if (!escan_result) {
 			WL_ERR(("Invalid escan result (NULL pointer)\n"));
+			goto exit;
+		}
+		if ((dtoh32(escan_result->buflen) > (int)ESCAN_BUF_SIZE) ||
+		    (dtoh32(escan_result->buflen) < sizeof(wl_escan_result_t))) {
+			WL_ERR(("Invalid escan buffer len:%d\n", dtoh32(escan_result->buflen)));
 			goto exit;
 		}
 		if (dtoh16(escan_result->bss_count) != 1) {
@@ -11925,7 +11934,7 @@ static void wl_update_hidden_ap_ie(struct wl_bss_info *bi, u8 *ie_stream, u32 *i
 {
 	u8 *ssidie;
 	int32 ssid_len = MIN(bi->SSID_len, DOT11_MAX_SSID_LEN);
-	int32 remaining_ie_buf_len, available_buffer_len;
+	int32 remaining_ie_buf_len, available_buffer_len, unused_buf_len;
 	ssidie = (u8 *)cfg80211_find_ie(WLAN_EID_SSID, ie_stream, *ie_size);
 
 	/* ERROR out if
@@ -11940,24 +11949,28 @@ static void wl_update_hidden_ap_ie(struct wl_bss_info *bi, u8 *ie_stream, u32 *i
 	}
 	available_buffer_len = ((int)(*ie_size)) - (ssidie + 2 - ie_stream);
 	remaining_ie_buf_len = available_buffer_len - (int)ssidie[1];
-	if ((ssid_len > ssidie[1]) ||
-		(ssidie[1] > available_buffer_len)) {
+	unused_buf_len = WL_EXTRA_BUF_MAX - (4 + bi->length + *ie_size);
+	if (ssidie[1] > available_buffer_len) {
+		WL_ERR(("%s: skip wl_update_hidden_ap_ie : overflow\n", __FUNCTION__));
 		return;
 	}
 
 	if (ssidie[1] != ssid_len) {
 		if (ssidie[1]) {
-			WL_ERR(("%s: Wrong SSID len: %d != %d\n",
+			WL_INFO(("%s: Wrong SSID len: %d != %d\n",
 				__FUNCTION__, ssidie[1], bi->SSID_len));
 		}
-		if (roam) {
-			WL_ERR(("Changing the SSID Info.\n"));
+		if ((roam && (ssid_len > ssidie[1])) && (unused_buf_len > ssid_len)) {
+			WL_INFO(("Changing the SSID Info.\n"));
 			memmove(ssidie + ssid_len + 2,
 				(ssidie + 2) + ssidie[1],
 				remaining_ie_buf_len);
 			memcpy(ssidie + 2, bi->SSID, ssid_len);
 			*ie_size = *ie_size + ssid_len - ssidie[1];
 			ssidie[1] = ssid_len;
+		} else if (ssid_len < ssidie[1]) {
+			WL_ERR(("%s: Invalid SSID len: %d < %d\n",
+				__FUNCTION__, ssidie[1], bi->SSID_len));
 		}
 		return;
 	}
