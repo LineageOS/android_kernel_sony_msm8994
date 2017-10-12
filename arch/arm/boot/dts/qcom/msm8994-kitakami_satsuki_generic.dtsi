@@ -37,6 +37,18 @@
 			pinctrl-1 = <&msm_gpio_29_nfc_sus &msm_gpio_30_sus>;
 		};
 	};
+	
+	sim_detect {
+		compatible = "sim-detect";
+		interrupt-parent = <&msm_gpio>;
+		interrupts = <52 0>;
+		
+		sim2_det {
+			label = "sim2-detection";
+			gpios = <&msm_gpio 52 0x0>;
+			debounce-interval = <10>;
+		};
+	};
 };
 
 &pm8994_gpios {
