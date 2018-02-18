@@ -125,9 +125,9 @@ static void __timerfd_remove_cancel(struct timerfd_ctx *ctx)
 
 static void timerfd_remove_cancel(struct timerfd_ctx *ctx)
 {
-		spin_lock(&ctx->cancel_lock);
-		__timerfd_remove_cancel(ctx);
-		spin_unlock(&ctx->cancel_lock);
+	spin_lock(&ctx->cancel_lock);
+	__timerfd_remove_cancel(ctx);
+	spin_unlock(&ctx->cancel_lock);
 }
 
 static bool timerfd_canceled(struct timerfd_ctx *ctx)
@@ -151,10 +151,10 @@ static void timerfd_setup_cancel(struct timerfd_ctx *ctx, int flags)
 			list_add_rcu(&ctx->clist, &cancel_list);
 			spin_unlock(&cancel_lock);
 		}
-		} else {
-				__timerfd_remove_cancel(ctx);
-		}
-		spin_unlock(&ctx->cancel_lock);
+	} else {
+		__timerfd_remove_cancel(ctx);
+	}
+	spin_unlock(&ctx->cancel_lock);
 }
 
 static ktime_t timerfd_get_remaining(struct timerfd_ctx *ctx)
