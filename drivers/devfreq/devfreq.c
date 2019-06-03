@@ -505,16 +505,9 @@ struct devfreq *devfreq_add_device(struct device *dev,
 						devfreq->profile->max_state *
 						devfreq->profile->max_state,
 						GFP_KERNEL);
-<<<<<<< HEAD
-	devfreq->time_in_state = devm_kzalloc(dev,
-					sizeof(*(devfreq->time_in_state)) *
-					devfreq->profile->max_state,
-					GFP_KERNEL);
-=======
 	devfreq->time_in_state = devm_kzalloc(dev, sizeof(unsigned long) *
 						devfreq->profile->max_state,
 						GFP_KERNEL);
->>>>>>> e7a59c7f266809d17dcde20fd2055e23e7eb6895
 	devfreq->last_stat_updated = jiffies;
 	devfreq_set_freq_limits(devfreq);
 
