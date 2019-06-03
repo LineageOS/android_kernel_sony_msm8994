@@ -467,11 +467,11 @@ static void fiops_init_prio_data(struct fiops_ioc *cic)
 		cic->wl_type = fiops_wl_type(task_nice_ioclass(tsk));
 		break;
 	case IOPRIO_CLASS_RT:
-		cic->ioprio = IOPRIO_PRIO_DATA(ioc->ioprio);
+		cic->ioprio = task_ioprio(ioc);
 		cic->wl_type = fiops_wl_type(IOPRIO_CLASS_RT);
 		break;
 	case IOPRIO_CLASS_BE:
-		cic->ioprio = IOPRIO_PRIO_DATA(ioc->ioprio);
+		cic->ioprio = task_ioprio(ioc);
 		cic->wl_type = fiops_wl_type(IOPRIO_CLASS_BE);
 		break;
 	case IOPRIO_CLASS_IDLE:
@@ -501,7 +501,7 @@ static void fiops_insert_request(struct request_queue *q, struct request *rq)
 static inline void fiops_schedule_dispatch(struct fiops_data *fiopsd)
 {
 	if (fiopsd->busy_queues)
-		kblockd_schedule_work(&fiopsd->unplug_work);
+		kblockd_schedule_work(fiopsd->queue, &fiopsd->unplug_work);
 }
 
 static void fiops_completed_request(struct request_queue *q, struct request *rq)
@@ -528,7 +528,9 @@ fiops_find_rq_fmerge(struct fiops_data *fiopsd, struct bio *bio)
 	cic = fiops_cic_lookup(fiopsd, tsk->io_context);
 
 	if (cic) {
-		return elv_rb_find(&cic->sort_list, bio_end_sector(bio));
+		sector_t sector = bio->bi_sector + bio_sectors(bio);
+
+		return elv_rb_find(&cic->sort_list, sector);
 	}
 
 	return NULL;
@@ -612,27 +614,16 @@ static void fiops_kick_queue(struct work_struct *work)
 	spin_unlock_irq(q->queue_lock);
 }
 
-static int fiops_init_queue(struct request_queue *q, struct elevator_type *e)
+static void *fiops_init_queue(struct request_queue *q)
 {
 	struct fiops_data *fiopsd;
 	int i;
-	struct elevator_queue *eq;
-
-	eq = elevator_alloc(q, e);
-	if (!eq)
-		return -ENOMEM;
 
 	fiopsd = kzalloc_node(sizeof(*fiopsd), GFP_KERNEL, q->node);
-	if (!fiopsd) {
-		kobject_put(&eq->kobj);
-		return -ENOMEM;
-	}
-	eq->elevator_data = fiopsd;
+	if (!fiopsd)
+		return NULL;
 
 	fiopsd->queue = q;
-	spin_lock_irq(q->queue_lock);
-	q->elevator = eq;
-	spin_unlock_irq(q->queue_lock);
 
 	for (i = IDLE_WORKLOAD; i <= RT_WORKLOAD; i++)
 		fiopsd->service_tree[i] = FIOPS_RB_ROOT;
@@ -644,7 +635,7 @@ static int fiops_init_queue(struct request_queue *q, struct elevator_type *e)
 	fiopsd->sync_scale = VIOS_SYNC_SCALE;
 	fiopsd->async_scale = VIOS_ASYNC_SCALE;
 
-	return 0;
+	return fiopsd;
 }
 
 static void fiops_init_icq(struct io_cq *icq)
@@ -760,4 +751,3 @@ module_exit(fiops_exit);
 MODULE_AUTHOR("Jens Axboe, Shaohua Li <shli@kernel.org>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("IOPS based IO scheduler");
-
