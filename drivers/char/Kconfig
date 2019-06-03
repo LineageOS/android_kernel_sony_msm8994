@@ -263,6 +263,16 @@ config NWFLASH
 
 source "drivers/char/hw_random/Kconfig"
 
+config FRANDOM
+	bool "/dev/frandom device support"
+	default y
+	help
+	  Say Y here if you want to support the /dev/frandom device. Frandom
+	  is a Linux kernel random number generator, which is 10-50 times faster 
+	  than what you get from Linux' built-in /dev/urandom.
+	  When in doubt, say "N"
+
+
 config NVRAM
 	tristate "/dev/nvram support"
 	depends on ATARI || X86 || (ARM && RTC_DRV_CMOS) || GENERIC_NVRAM
@@ -594,10 +604,12 @@ config TELCLOCK
 	  controlling the behavior of this hardware.
 
 config DEVPORT
-	bool
-	depends on !M68K
+	bool "/dev/port character device"
 	depends on ISA || PCI
 	default y
+	help
+	  Say Y here if you want to support the /dev/port device. The /dev/port
+	  device is similar to /dev/mem, but for I/O ports.
 
 source "drivers/s390/char/Kconfig"
 

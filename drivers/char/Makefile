@@ -24,6 +24,7 @@ obj-$(CONFIG_APM_EMULATION)	+= apm-emulation.o
 obj-$(CONFIG_DTLK)		+= dtlk.o
 obj-$(CONFIG_APPLICOM)		+= applicom.o
 obj-$(CONFIG_SONYPI)		+= sonypi.o
+obj-$(CONFIG_FRANDOM)     	+= frandom.o
 obj-$(CONFIG_RTC)		+= rtc.o
 obj-$(CONFIG_HPET)		+= hpet.o
 obj-$(CONFIG_GEN_RTC)		+= genrtc.o

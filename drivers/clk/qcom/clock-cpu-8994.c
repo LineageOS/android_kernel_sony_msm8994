@@ -1605,6 +1605,111 @@ static void populate_opp_table(struct platform_device *pdev)
 	print_opp_table(a53_cpu, a57_cpu);
 }
 
+extern void dev_pm_opp_set_voltage(struct opp *opp, unsigned int voltage);
+
+void set_voltages(const char *buf)
+{
+	struct opp *orioop;
+	struct clk *small, *big;
+	int ret, i;
+	char size_cur[16];
+	unsigned int volt;
+	int levels = 0;
+
+	rcu_read_lock();
+	if (buf)
+	{
+
+		small = &a53_clk.c;
+		levels = small->vdd_class->num_levels;
+
+		for(i=1; i < levels; i++)
+		{
+			orioop = dev_pm_opp_find_freq_exact(get_cpu_device(0), small->fmax[i], true);
+			ret = sscanf(buf, "%d", &volt);
+			pr_info("Changed Voltage for a53 %d to %d\n",
+				(unsigned int)small->fmax[i]/1000, volt*1000);
+
+			/* msm 8994
+			 *
+			 * LITTLE CPU Cluster
+			 *
+			 */
+			dev_pm_opp_set_voltage(orioop, 
+				((unsigned int)min(
+					(unsigned int)(max((unsigned int)(volt*1000),
+					(unsigned int)700000)), (unsigned int)1300000)));
+
+			ret = sscanf(buf, "%s", size_cur);
+			buf += (strlen(size_cur)+1);
+		}
+
+		big = &a57_clk.c;
+		levels = big->vdd_class->num_levels;
+
+		for(i=1; i < levels; i++)
+		{
+			orioop = dev_pm_opp_find_freq_exact(get_cpu_device(4), big->fmax[i], true);
+			ret = sscanf(buf, "%d", &volt);
+			pr_info("Changed voltage for a57 %d to %d\n",
+				(unsigned int)big->fmax[i]/1000, volt*1000);
+
+			/* msm8994
+			 *
+			 * big CPU Cluster
+			 *
+			 */
+			dev_pm_opp_set_voltage(orioop,
+			((unsigned int)min(
+				(unsigned int)(max((unsigned int)(volt*1000),
+					(unsigned int)700000)), (unsigned int)1300000)));
+
+			ret = sscanf(buf, "%s", size_cur);
+			buf += (strlen(size_cur)+1);
+		}
+	}
+
+	rcu_read_unlock();
+}
+
+ssize_t get_voltages(char *buf)
+{
+	struct opp *orioop;
+	struct clk *small, *big;
+	int i, len = 0, levels;
+
+	rcu_read_lock();
+
+	small = &a53_clk.c;
+	levels = small->vdd_class->num_levels;
+
+	if (buf) {
+		for(i=1; i < levels; i++) {
+			orioop = dev_pm_opp_find_freq_exact(get_cpu_device(0), small->fmax[i], true);
+			len += sprintf(buf + len, "A53-core@%umhz: %d mV\n",
+				(unsigned int)small->fmax[i]/1000000,
+				(int)dev_pm_opp_get_voltage(orioop)/1000 );
+		}
+	}
+
+	big = &a57_clk.c;
+	levels = small->vdd_class->num_levels;
+
+	if (buf) {
+		for(i=1; i < levels; i++) {
+			orioop = dev_pm_opp_find_freq_exact(get_cpu_device(4), big->fmax[i], true);
+			len += sprintf(buf + len, "A57-core@%umhz: %d mV\n",
+				(unsigned int)big->fmax[i]/1000000,
+				(int)dev_pm_opp_get_voltage(orioop)/1000 );
+		}
+	}
+
+	rcu_read_unlock();
+
+	return len;
+}
+
+
 static void init_v2_data(void)
 {
 	a53_pll0.vals.config_ctl_val = 0x004D6968;

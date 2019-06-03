@@ -29,6 +29,7 @@ arm64-obj-$(CONFIG_HW_PERF_EVENTS)	+= perf_event.o perf_debug.o 		\
 					   perf_trace_user.o
 arm64-obj-$(CONFIG_HAVE_HW_BREAKPOINT)	+= hw_breakpoint.o
 arm64-obj-$(CONFIG_EARLY_PRINTK)	+= early_printk.o
+arm64-obj-$(CONFIG_BRICKED_HOTPLUG)           += bricked_hotplug.o
 arm64-obj-$(CONFIG_ARM64_CPU_SUSPEND)	+= sleep.o suspend.o
 arm64-obj-$(CONFIG_JUMP_LABEL)		+= jump_label.o
 arm64-obj-$(CONFIG_KGDB)		+= kgdb.o

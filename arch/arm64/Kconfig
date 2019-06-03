@@ -109,6 +109,10 @@ config ILLEGAL_POINTER_VALUE
 config STACKTRACE_SUPPORT
 	def_bool y
 
+config ILLEGAL_POINTER_VALUE
+	hex
+	default 0xdead000000000000
+
 config LOCKDEP_SUPPORT
 	def_bool y
 
@@ -463,6 +467,15 @@ config ARM64_SEV_IN_LOCK_UNLOCK
 	  Add an explicity dsb and SEV in write_unlock, read_unlock
 	  and spin_unlock to ensure that the core waiting on the lock
 	  wakes up from WFE.
+
+
+config BRICKED_HOTPLUG
+	bool "Enable kernel based mpdecision"
+	depends on MSM_RUN_QUEUE_STATS
+	default n
+	help
+	  This enables kernel based multi core control.
+	  (up/down hotplug based on load)
 
 config SMP
 	bool "Symmetric Multi-Processing"
