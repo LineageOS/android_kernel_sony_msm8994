@@ -43,11 +43,14 @@ config IOSCHED_ROW
 	  according to queue priority.
 	  Most suitable for mobile devices.
 
+<<<<<<< HEAD
 	config IOSCHED_FIOPS
 	tristate "IOPS based I/O scheduler"
 	default y
 
 
+=======
+>>>>>>> parent of 7eeb9af3e17... Add FIOPS iosched
 config IOSCHED_CFQ
 	tristate "CFQ I/O scheduler"
 	default y
@@ -92,9 +95,6 @@ choice
 	config DEFAULT_NOOP
 		bool "No-op"
 
-	config DEFAULT_FIOPS
-		bool "FIOPS" if IOSCHED_FIOPS=y
-
 endchoice
 
 config DEFAULT_IOSCHED
@@ -102,7 +102,6 @@ config DEFAULT_IOSCHED
 	default "deadline" if DEFAULT_DEADLINE
 	default "row" if DEFAULT_ROW
 	default "cfq" if DEFAULT_CFQ
-	default "fiops" if DEFAULT_FIOPS
 	default "noop" if DEFAULT_NOOP
 
 endmenu
