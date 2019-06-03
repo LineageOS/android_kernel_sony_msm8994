@@ -43,14 +43,6 @@ config IOSCHED_ROW
 	  according to queue priority.
 	  Most suitable for mobile devices.
 
-<<<<<<< HEAD
-	config IOSCHED_FIOPS
-	tristate "IOPS based I/O scheduler"
-	default y
-
-
-=======
->>>>>>> parent of 7eeb9af3e17... Add FIOPS iosched
 config IOSCHED_CFQ
 	tristate "CFQ I/O scheduler"
 	default y
