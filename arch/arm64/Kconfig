@@ -468,6 +468,15 @@ config ARM64_SEV_IN_LOCK_UNLOCK
 	  and spin_unlock to ensure that the core waiting on the lock
 	  wakes up from WFE.
 
+
+config BRICKED_HOTPLUG
+	bool "Enable kernel based mpdecision"
+	depends on MSM_RUN_QUEUE_STATS
+	default n
+	help
+	  This enables kernel based multi core control.
+	  (up/down hotplug based on load)
+
 config SMP
 	bool "Symmetric Multi-Processing"
 	help
