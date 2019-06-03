@@ -136,6 +136,45 @@ static struct device_opp *find_device_opp(struct device *dev)
 }
 
 /**
+ * dev_pm_opp_set_voltage() - Gets the voltage corresponding to an available opp
+ * @opp:	opp for which voltage has to be returned for
+ * @voltage: voltage
+ * Return voltage in micro volt corresponding to the opp, else
+ * return 0
+ *
+ * Locking: This function must be called under rcu_read_lock(). opp is a rcu
+ * protected pointer. This means that opp which could have been fetched by
+ * opp_find_freq_{exact,ceil,floor} functions is valid as long as we are
+ * under RCU lock. The pointer returned by the opp_find_freq family must be
+ * used in the same section as the usage of this function with the pointer
+ * prior to unlocking with rcu_read_unlock() to maintain the integrity of the
+ * pointer.
+ */
+
+void dev_pm_opp_set_voltage(struct opp *opp, unsigned int voltage)
+{
+	struct opp *tmp_opp;
+	tmp_opp = rcu_dereference(opp);
+	if (unlikely(IS_ERR_OR_NULL(tmp_opp)) || !tmp_opp->available)
+	{
+		pr_err("%s: Invalid parameters\n", __func__);
+	}
+	else
+	{
+		/* Do last checking procedure for a valid voltage */
+		if((unsigned long)voltage <= (unsigned long)1300000 && (unsigned long)voltage >= (unsigned long)700000)
+		{
+			tmp_opp->u_volt = (unsigned long)voltage;
+		}
+		else
+		{
+			pr_err("Error %d: Invalid voltage!\n", voltage);
+		}
+	}
+}
+EXPORT_SYMBOL_GPL(dev_pm_opp_set_voltage);
+
+/**
  * dev_pm_opp_get_voltage() - Gets the voltage corresponding to an available opp
  * @opp:	opp for which voltage has to be returned for
  *

@@ -27,6 +27,8 @@ enum opp_event {
 
 #if defined(CONFIG_PM_OPP)
 
+void dev_pm_opp_set_voltage(struct opp *opp, unsigned int voltage);
+
 unsigned long dev_pm_opp_get_voltage(struct opp *opp);
 
 unsigned long dev_pm_opp_get_freq(struct opp *opp);
