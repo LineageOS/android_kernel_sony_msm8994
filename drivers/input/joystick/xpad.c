@@ -1127,6 +1127,16 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	struct input_dev *input_dev;
 	int i, error;
 
+	if (xpad->intf->cur_altsetting->desc.bNumEndpoints != 2)
+		return -ENODEV;
+
+	for (i = 0; xpad_device[i].idVendor; i++) {
+		if ((le16_to_cpu(xpad->udev->descriptor.idVendor) == xpad_device[i].idVendor) &&
+		    (le16_to_cpu(xpad->udev->descriptor.idProduct) == xpad_device[i].idProduct))
+			break;
+	}
+
+	xpad = kzalloc(sizeof(struct usb_xpad), GFP_KERNEL);
 	input_dev = input_allocate_device();
 	if (!input_dev)
 		return -ENOMEM;
@@ -1134,8 +1144,14 @@ static int xpad_init_input(struct usb_xpad *xpad)
 	xpad->dev = input_dev;
 	input_dev->name = xpad->name;
 	input_dev->phys = xpad->phys;
-	usb_to_input_id(xpad->udev, &input_dev->id);
-	input_dev->dev.parent = &xpad->intf->dev;
+	usb_to_input_id(udev, &input_dev->id);
+
+	if (xpad->xtype == XTYPE_XBOX360W) {
+		/* x360w controllers and the receiver have different ids */
+		input_dev->id.product = 0x02a1;
+	}
+
+	input_dev->dev.parent = &intf->dev;
 
 	input_set_drvdata(input_dev, xpad);
 

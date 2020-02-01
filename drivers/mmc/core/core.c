@@ -566,33 +566,10 @@ EXPORT_SYMBOL(mmc_start_bkops);
  */
 static void mmc_wait_data_done(struct mmc_request *mrq)
 {
-	unsigned long flags;
 	struct mmc_context_info *context_info = &mrq->host->context_info;
 
-	spin_lock_irqsave(&context_info->lock, flags);
-	mrq->host->context_info.is_done_rcv = true;
-	wake_up_interruptible(&mrq->host->context_info.wait);
-	spin_unlock_irqrestore(&context_info->lock, flags);
-}
-
-/**
- * mmc_start_idle_time_bkops() - check if a non urgent BKOPS is
- * needed
- * @work:	The idle time BKOPS work
- */
-void mmc_start_idle_time_bkops(struct work_struct *work)
-{
-	struct mmc_card *card = container_of(work, struct mmc_card,
-			bkops_info.dw.work);
-
-	/*
-	 * Prevent a race condition between mmc_stop_bkops and the delayed
-	 * BKOPS work in case the delayed work is executed on another CPU
-	 */
-	if (card->bkops_info.cancel_delayed_work)
-		return;
-
-	mmc_start_bkops(card, false);
+	context_info->is_done_rcv = true;
+	wake_up_interruptible(&context_info->wait);
 }
 EXPORT_SYMBOL(mmc_start_idle_time_bkops);
 
@@ -1391,11 +1368,11 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	/*
 	 * Some cards require longer data read timeout than indicated in CSD.
 	 * Address this by setting the read timeout to a "reasonably high"
-	 * value. For the cards tested, 300ms has proven enough. If necessary,
+	 * value. For the cards tested, 600ms has proven enough. If necessary,
 	 * this value can be increased if other problematic cards require this.
 	 */
 	if (mmc_card_long_read_time(card) && data->flags & MMC_DATA_READ) {
-		data->timeout_ns = 300000000;
+		data->timeout_ns = 600000000;
 		data->timeout_clks = 0;
 	}
 
