@@ -855,6 +855,66 @@ static int snd_compress_simple_ioctls(struct file *file,
 
 	default:
 		mutex_unlock(&stream->device->lock);
+		return snd_compress_simple_ioctls(file, stream, cmd, arg);
+
+	}
+
+	mutex_unlock(&stream->device->lock);
+	return retval;
+}
+
+static long snd_compr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
+{
+	struct snd_compr_file *data = f->private_data;
+	struct snd_compr_stream *stream;
+	int retval = -ENOTTY;
+
+	if (snd_BUG_ON(!data))
+		return -EFAULT;
+	stream = &data->stream;
+	if (snd_BUG_ON(!stream))
+		return -EFAULT;
+
+	mutex_lock(&stream->device->lock);
+	switch (_IOC_NR(cmd)) {
+	case _IOC_NR(SNDRV_COMPRESS_SET_PARAMS):
+		retval = snd_compr_set_params(stream, arg);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_GET_PARAMS):
+		retval = snd_compr_get_params(stream, arg);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_SET_METADATA):
+		retval = snd_compr_set_metadata(stream, arg);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_GET_METADATA):
+		retval = snd_compr_get_metadata(stream, arg);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_PAUSE):
+		retval = snd_compr_pause(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_RESUME):
+		retval = snd_compr_resume(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_START):
+		retval = snd_compr_start(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_STOP):
+		retval = snd_compr_stop(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_NEXT_TRACK):
+		retval = snd_compr_next_track(stream);
+		break;
+
+	default:
+		mutex_unlock(&stream->device->lock);
 		return snd_compress_simple_ioctls(f, stream, cmd, arg);
 
 	}
@@ -862,6 +922,7 @@ static int snd_compress_simple_ioctls(struct file *file,
 	mutex_unlock(&stream->device->lock);
 	return retval;
 }
+
 
 static const struct file_operations snd_compr_file_ops = {
 		.owner =          THIS_MODULE,
