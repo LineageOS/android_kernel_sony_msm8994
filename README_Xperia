@@ -63,3 +63,4 @@ How to build your kernel:
       --ramdisk_offset 0x02000000 \
       --tags_offset 0x01E00000 \
       --output boot.img
+test
