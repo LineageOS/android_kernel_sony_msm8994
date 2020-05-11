@@ -193,7 +193,8 @@ SUBARCH := $(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/ \
 # Default value for CROSS_COMPILE is not to prefix executables
 # Note: Some architectures assign CROSS_COMPILE in their arch/*/Makefile
 ARCH		?= $(SUBARCH)
-CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
+#CROSS_COMPILE	?= $(CONFIG_CROSS_COMPILE:"%"=%)
+CROSS_COMPILE = /home/thread/dev/sdk/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 
 # Architecture as present in compile.h
 UTS_MACHINE 	:= $(ARCH)
@@ -382,7 +383,6 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 	-ftree-loop-ivcanon \
 	-fshrink-wrap -fshrink-wrap-separate -mtune=cortex-a57.cortex-a53 \
 	-march=armv8-a+crc+crypto+simd -fmodulo-sched -fmodulo-sched-allow-regmoves \
-	-fgraphite -fgraphite-identity -floop-strip-mine -floop-block \
 	-fivopts \
 	-finline-small-functions -fpartial-inlining -findirect-inlining \
 	-foptimize-sibling-calls \
@@ -394,6 +394,8 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 	-Wno-maybe-uninitialized -Wno-misleading-indentation \
 	-Wno-array-bounds -Wno-shift-overflow \
 		   -std=gnu89 $(call cc-option,-fno-PIE)
+# Not compatible with default linaro gcc 7.5 -fgraphite -fgraphite-identity -floop-strip-mine -floop-block
+# Not compatible with gcc4.7  -fipa-ra  -fipa-icf -fipa-vrp -fipa-bit-cp -fshrink-wrap-separate 
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
