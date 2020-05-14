@@ -460,8 +460,10 @@ static int32_t msm_sensor_get_power_down_settings(void *setting,
 	}
 	/* Allocate memory for power down setting */
 	pd = kzalloc(sizeof(*pd) * size_down, GFP_KERNEL);
-	if (!pd)
+	if (!pd) {
+		pr_err("failed: no memory power_setting %pK", pd);
 		return -EFAULT;
+	}
 
 	if (slave_info->power_setting_array.power_down_setting) {
 #ifdef CONFIG_COMPAT
@@ -525,8 +527,10 @@ static int32_t msm_sensor_get_power_up_settings(void *setting,
 
 	/* Allocate memory for power up setting */
 	pu = kzalloc(sizeof(*pu) * size, GFP_KERNEL);
-	if (!pu)
+	if (!pu) {
+		pr_err("failed: no memory power_setting %pK", pu);
 		return -ENOMEM;
+	}
 
 #ifdef CONFIG_COMPAT
 	if (is_compat_task()) {
@@ -642,9 +646,10 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 	/* Allocate memory for slave info */
 	slave_info = kzalloc(sizeof(*slave_info), GFP_KERNEL);
-	if (!slave_info)
+	if (!slave_info) {
+		pr_err("failed: no memory slave_info %pK", slave_info);
 		return -ENOMEM;
-
+	}
 #ifdef CONFIG_COMPAT
 	if (is_compat_task()) {
 		struct msm_camera_sensor_slave_info32 *slave_info32 =
@@ -800,8 +805,11 @@ int32_t msm_sensor_driver_probe(void *setting,
 
 
 	camera_info = kzalloc(sizeof(struct msm_camera_slave_info), GFP_KERNEL);
-	if (!camera_info)
+	if (!camera_info) {
+		pr_err("failed: no memory slave_info %pK", camera_info);
 		goto free_slave_info;
+
+	}
 
 	s_ctrl->sensordata->slave_info = camera_info;
 
@@ -1219,8 +1227,10 @@ static int32_t msm_sensor_driver_platform_probe(struct platform_device *pdev)
 
 	/* Create sensor control structure */
 	s_ctrl = kzalloc(sizeof(*s_ctrl), GFP_KERNEL);
-	if (!s_ctrl)
+	if (!s_ctrl) {
+		pr_err("failed: no memory s_ctrl %pK", s_ctrl);
 		return -ENOMEM;
+	}
 
 	platform_set_drvdata(pdev, s_ctrl);
 
@@ -1262,8 +1272,10 @@ static int32_t msm_sensor_driver_i2c_probe(struct i2c_client *client,
 
 	/* Create sensor control structure */
 	s_ctrl = kzalloc(sizeof(*s_ctrl), GFP_KERNEL);
-	if (!s_ctrl)
+	if (!s_ctrl) {
+		pr_err("failed: no memory s_ctrl %pK", s_ctrl);
 		return -ENOMEM;
+	}
 
 	i2c_set_clientdata(client, s_ctrl);
 
