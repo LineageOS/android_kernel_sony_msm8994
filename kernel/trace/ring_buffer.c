@@ -1376,7 +1376,7 @@ ring_buffer_free(struct ring_buffer *buffer)
 
 #ifdef CONFIG_HOTPLUG_CPU
 	cpu_notifier_register_begin();
-	unregister_cpu_notifier(&buffer->cpu_notify);
+	__unregister_cpu_notifier(&buffer->cpu_notify);
 #endif
 
 	for_each_buffer_cpu(buffer, cpu)
@@ -1655,7 +1655,6 @@ int ring_buffer_resize(struct ring_buffer *buffer, unsigned long size,
 
 	size = nr_pages * BUF_PAGE_SIZE;
 
-	size = nr_pages * BUF_PAGE_SIZE;
 	/*
 	 * Don't succeed if resizing is disabled, as a reader might be
 	 * manipulating the ring buffer and is expecting a sane state while
