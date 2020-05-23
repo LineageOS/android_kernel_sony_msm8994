@@ -1205,7 +1205,7 @@ static void zs_unregister_cpu_notifier(void)
 
 	for_each_online_cpu(cpu)
 		zs_cpu_notifier(NULL, CPU_DEAD, (void *)(long)cpu);
-	__unregister_cpu_notifier(&zs_cpu_nb);
+	unregister_cpu_notifier(&zs_cpu_nb);
 
 	cpu_notifier_register_done();
 }

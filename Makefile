@@ -1,8 +1,8 @@
 VERSION = 3
 PATCHLEVEL = 10
-SUBLEVEL = 84
+SUBLEVEL = 108
 EXTRAVERSION =
-NAME = TOSSUG Baby Fish
+NAME = END-OF-LIFE
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -373,8 +373,27 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
+		   -fdiagnostics-color=always \
 		   -fno-delete-null-pointer-checks \
-		   -std=gnu89
+	-fno-schedule-insns  -Os \
+	-flive-range-shrinkage \
+	-fira-loop-pressure -ftree-vectorize \
+	-ftree-loop-distribution -ftree-loop-distribute-patterns \
+	-ftree-loop-ivcanon \
+	-fshrink-wrap -fshrink-wrap-separate -mtune=cortex-a57.cortex-a53 \
+	-march=armv8-a+crc+crypto+simd -fmodulo-sched -fmodulo-sched-allow-regmoves \
+	-fgraphite -fgraphite-identity -floop-strip-mine -floop-block \
+	-fivopts \
+	-finline-small-functions -fpartial-inlining -findirect-inlining \
+	-foptimize-sibling-calls \
+	-fdevirtualize -fdevirtualize-speculatively \
+	-fgcse -fgcse-lm -fgcse-sm -fgcse-las -fgcse-after-reload \
+	-ftree-loop-im -funswitch-loops \
+	-fpredictive-commoning \
+	-fipa-cp -fipa-bit-cp -fipa-vrp -fipa-sra -fipa-icf -fipa-ra \
+	-Wno-maybe-uninitialized -Wno-misleading-indentation \
+	-Wno-array-bounds -Wno-shift-overflow \
+		   -std=gnu89 $(call cc-option,-fno-PIE)
 
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
@@ -577,6 +596,18 @@ KBUILD_CFLAGS	+= -Os $(call cc-disable-warning,maybe-uninitialized,)
 else
 KBUILD_CFLAGS	+= -O2
 endif
+
+# Disable all maybe-uninitialized warnings
+KBUILD_CFLAGS	+= $(call cc-disable-warning,maybe-uninitialized,)
+
+# Disable unused-constant-variable warnings
+KBUILD_CFLAGS	+= $(call cc-disable-warning,unused-const-variable,)
+
+# Disable format-truncation warnings
+KBUILD_CFLAGS   += $(call cc-disable-warning,format-truncation,)
+
+# Needed to unbreak GCC 7.x and above
+KBUILD_CFLAGS   += $(call cc-option,-fno-store-merging,)
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
 

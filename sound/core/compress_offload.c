@@ -44,6 +44,13 @@
 #include <sound/compress_offload.h>
 #include <sound/compress_driver.h>
 
+/* struct snd_compr_codec_caps overflows the ioctl bit size for some
+ * architectures, so we need to disable the relevant ioctls.
+ */
+#if _IOC_SIZEBITS < 14
+#define COMPR_CODEC_CAPS_OVERFLOW
+#endif
+
 /* TODO:
  * - add substream support for multiple devices in case of
  *	SND_DYNAMIC_MINORS is not used
@@ -443,6 +450,7 @@ out:
 	return retval;
 }
 
+#ifndef COMPR_CODEC_CAPS_OVERFLOW
 static int
 snd_compr_get_codec_caps(struct snd_compr_stream *stream, unsigned long arg)
 {
@@ -466,6 +474,7 @@ out:
 	kfree(caps);
 	return retval;
 }
+#endif /* !COMPR_CODEC_CAPS_OVERFLOW */
 
 /* revisit this with snd_pcm_preallocate_xxx */
 static int snd_compr_allocate_buffer(struct snd_compr_stream *stream,
@@ -799,34 +808,58 @@ static int snd_compress_simple_ioctls(struct file *file,
 	case _IOC_NR(SNDRV_COMPRESS_GET_CAPS):
 		retval = snd_compr_get_caps(stream, arg);
 		break;
-
+#ifndef COMPR_CODEC_CAPS_OVERFLOW
 	case _IOC_NR(SNDRV_COMPRESS_GET_CODEC_CAPS):
 		retval = snd_compr_get_codec_caps(stream, arg);
 		break;
-
-
-	case _IOC_NR(SNDRV_COMPRESS_TSTAMP):
-		retval = snd_compr_tstamp(stream, arg);
+#endif
+	case _IOC_NR(SNDRV_COMPRESS_SET_PARAMS):
+		retval = snd_compr_set_params(stream, arg);
 		break;
 
-	case _IOC_NR(SNDRV_COMPRESS_AVAIL):
-		retval = snd_compr_ioctl_avail(stream, arg);
+	case _IOC_NR(SNDRV_COMPRESS_GET_PARAMS):
+		retval = snd_compr_get_params(stream, arg);
 		break;
 
-	/* drain and partial drain need special handling
-	 * we need to drop the locks here as the streams would get blocked on
-	 * the dsp to get drained. The locking would be handled in respective
-	 * function here
-	 */
-	case _IOC_NR(SNDRV_COMPRESS_DRAIN):
-		retval = snd_compr_drain(stream);
+	case _IOC_NR(SNDRV_COMPRESS_SET_METADATA):
+		retval = snd_compr_set_metadata(stream, arg);
 		break;
 
-	case _IOC_NR(SNDRV_COMPRESS_PARTIAL_DRAIN):
-		retval = snd_compr_partial_drain(stream);
+	case _IOC_NR(SNDRV_COMPRESS_GET_METADATA):
+		retval = snd_compr_get_metadata(stream, arg);
 		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_PAUSE):
+		retval = snd_compr_pause(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_RESUME):
+		retval = snd_compr_resume(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_START):
+		retval = snd_compr_start(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_STOP):
+		retval = snd_compr_stop(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_NEXT_TRACK):
+		retval = snd_compr_next_track(stream);
+		break;
+
+	case _IOC_NR(SNDRV_COMPRESS_SET_NEXT_TRACK_PARAM):
+		retval = snd_compr_set_next_track_param(stream, arg);
+		break;
+
+	default:
+		mutex_unlock(&stream->device->lock);
+		return snd_compress_simple_ioctls(file, stream, cmd, arg);
+
 	}
 
+	mutex_unlock(&stream->device->lock);
 	return retval;
 }
 
@@ -880,10 +913,6 @@ static long snd_compr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		retval = snd_compr_next_track(stream);
 		break;
 
-	case _IOC_NR(SNDRV_COMPRESS_SET_NEXT_TRACK_PARAM):
-		retval = snd_compr_set_next_track_param(stream, arg);
-		break;
-
 	default:
 		mutex_unlock(&stream->device->lock);
 		return snd_compress_simple_ioctls(f, stream, cmd, arg);
@@ -893,6 +922,7 @@ static long snd_compr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	mutex_unlock(&stream->device->lock);
 	return retval;
 }
+
 
 static const struct file_operations snd_compr_file_ops = {
 		.owner =          THIS_MODULE,

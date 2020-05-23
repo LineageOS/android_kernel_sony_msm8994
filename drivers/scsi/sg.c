@@ -170,6 +170,7 @@ typedef struct sg_fd {		/* holds the state of a file descriptor */
 
 typedef struct sg_device { /* holds the state of each scsi generic device */
 	struct scsi_device *device;
+	struct mutex open_rel_lock;
 	wait_queue_head_t o_excl_wait;	/* queue open() when O_EXCL in use */
 	int sg_tablesize;	/* adapter's max scatter-gather table size */
 	u32 index;		/* device index number */
@@ -636,7 +637,8 @@ sg_write(struct file *filp, const char __user *buf, size_t count, loff_t * ppos)
 	else
 		hp->dxfer_direction = (mxsize > 0) ? SG_DXFER_FROM_DEV : SG_DXFER_NONE;
 	hp->dxfer_len = mxsize;
-	if (hp->dxfer_direction == SG_DXFER_TO_DEV)
+	if ((hp->dxfer_direction == SG_DXFER_TO_DEV) ||
+	    (hp->dxfer_direction == SG_DXFER_TO_FROM_DEV))
 		hp->dxferp = (char __user *)buf + cmd_size;
 	else
 		hp->dxferp = NULL;
@@ -1273,7 +1275,7 @@ sg_mmap(struct file *filp, struct vm_area_struct *vma)
 	}
 
 	sfp->mmap_called = 1;
-	vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
+	vma->vm_flags |= VM_IO | VM_DONTEXPAND | VM_DONTDUMP;
 	vma->vm_private_data = sfp;
 	vma->vm_ops = &sg_mmap_vm_ops;
 	return 0;
@@ -1430,6 +1432,7 @@ static Sg_device *sg_alloc(struct gendisk *disk, struct scsi_device *scsidp)
 	disk->first_minor = k;
 	sdp->disk = disk;
 	sdp->device = scsidp;
+	mutex_init(&sdp->open_rel_lock);
 	INIT_LIST_HEAD(&sdp->sfds);
 	init_waitqueue_head(&sdp->o_excl_wait);
 	sdp->sg_tablesize = queue_max_segments(q);
@@ -1708,7 +1711,7 @@ static int sg_start_req(Sg_request *srp, unsigned char *cmd)
 			md->from_user = 0;
 	}
 
-	if (unlikely(iov_count > MAX_UIOVEC))
+	if (unlikely(iov_count > UIO_MAXIOV))
 		return -EINVAL;
 
 	if (iov_count) {

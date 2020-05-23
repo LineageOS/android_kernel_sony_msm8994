@@ -697,9 +697,9 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 		inet_sk(newsk)->inet_sport = inet_rsk(req)->loc_port;
 		newsk->sk_write_space = sk_stream_write_space;
 
-		inet_sk(newsk)->mc_list = NULL;
-
 		newsk->sk_mark = inet_rsk(req)->ir_mark;
+
+		inet_sk(newsk)->mc_list = NULL;
 
 		newicsk->icsk_retransmits = 0;
 		newicsk->icsk_backoff	  = 0;

@@ -167,8 +167,10 @@ static int __init msm_sensor_init_module(void)
 	int ret = 0;
 	/* Allocate memory for msm_sensor_init control structure */
 	s_init = kzalloc(sizeof(struct msm_sensor_init_t), GFP_KERNEL);
-	if (!s_init)
+	if (!s_init) {
+		pr_err("failed: no memory s_init %pK", NULL);
 		return -ENOMEM;
+	}
 
 	CDBG("MSM_SENSOR_INIT_MODULE %pK", NULL);
 

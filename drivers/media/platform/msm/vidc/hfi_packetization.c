@@ -111,6 +111,7 @@ static inline int hal_to_hfi_type(int property, int hal_type)
 static inline u32 get_hfi_layout(enum hal_buffer_layout_type hal_buf_layout)
 {
 	u32 hfi_layout;
+
 	switch (hal_buf_layout) {
 	case HAL_BUFFER_LAYOUT_TOP_BOTTOM:
 		hfi_layout = HFI_MVC_BUFFER_LAYOUT_TOP_BOTTOM;
@@ -127,9 +128,10 @@ static inline u32 get_hfi_layout(enum hal_buffer_layout_type hal_buf_layout)
 	return hfi_layout;
 }
 
-static inline u32 get_hfi_codec(enum hal_video_codec hal_codec)
+inline u32 get_hfi_codec(enum hal_video_codec hal_codec)
 {
-	u32 hfi_codec;
+	u32 hfi_codec = 0;
+
 	switch (hal_codec) {
 	case HAL_VIDEO_CODEC_MVC:
 	case HAL_VIDEO_CODEC_H264:
@@ -334,7 +336,7 @@ int create_pkt_cmd_sys_ping(struct hfi_cmd_sys_ping_packet *pkt)
 	return rc;
 }
 
-inline int create_pkt_cmd_sys_session_init(
+static inline int create_pkt_cmd_sys_session_init(
 		struct hfi_cmd_sys_session_init_packet *pkt,
 		struct hal_session *session,
 		u32 session_domain, u32 session_codec)
